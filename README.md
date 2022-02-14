@@ -1,2 +1,3 @@
-# template-druxt-module
-This is a template for creating a DruxtJS module.
+# Druxt: Node Preview
+
+This is the Druxt JSON:API Node Preview client module.

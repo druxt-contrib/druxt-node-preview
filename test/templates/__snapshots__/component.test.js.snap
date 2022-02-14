@@ -1,0 +1,7 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Component No data 1`] = `
+"<div class=\\"druxt-node-preview\\">
+  <!---->
+</div>"
+`;
