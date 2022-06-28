@@ -1,4 +1,4 @@
-uuid: 246d11bc-ca1d-4b12-acf9-03408d39b779
+uuid: fe84daa7-1b5a-45d8-9eed-2e27cb70d6c0
 langcode: en
 status: true
 dependencies:
@@ -7,7 +7,6 @@ dependencies:
   module:
     - comment
     - contact
-    - druxt
     - filter
     - search
     - shortcut
@@ -21,7 +20,6 @@ is_admin: false
 permissions:
   - 'access comments'
   - 'access content'
-  - 'access druxt resources'
   - 'access shortcuts'
   - 'access site-wide contact form'
   - 'post comments'

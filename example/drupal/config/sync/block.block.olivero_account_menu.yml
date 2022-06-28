@@ -1,4 +1,4 @@
-uuid: 0cdf0af8-853d-4c04-9d26-9d44c95a0e07
+uuid: 571b86b4-70ce-4a71-9e32-db6a815292d8
 langcode: en
 status: true
 dependencies:
@@ -7,13 +7,13 @@ dependencies:
   module:
     - system
   theme:
-    - bartik
+    - olivero
 _core:
-  default_config_hash: jzu74Q7R0QWgw8IniA9HZRSb_a8RPak1M0q5J-VGkZI
-id: bartik_account_menu
-theme: bartik
+  default_config_hash: gmxYWWHmgbe0Pnv8y48ZLSLH5mEHejOjAP6RLxUfdzU
+id: olivero_account_menu
+theme: olivero
 region: secondary_menu
-weight: 0
+weight: -4
 provider: null
 plugin: 'system_menu_block:account'
 settings:
