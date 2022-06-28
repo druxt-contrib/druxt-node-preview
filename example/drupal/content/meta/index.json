@@ -1,0 +1,13 @@
+{
+    "shortcut.093f30b8-0f16-46f8-94ef-06cfab2efece": [],
+    "shortcut.fae772b5-9da1-4d8a-b792-f2e9f6eedbe1": [],
+    "user.45ce7cbe-b066-4f3d-b1b7-ad25d3e21bec": [],
+    "user.85f16c81-8b7f-4379-8e7a-9230968d9670": [],
+    "taxonomy_term.e489fa88-6197-492a-95a3-ddf320126c8c": [],
+    "taxonomy_term.edb52239-f68d-490f-a643-99785dd06a93": [],
+    "node.c6e668a0-1b37-4ace-a958-9531084e07ad": [
+        "user.45ce7cbe-b066-4f3d-b1b7-ad25d3e21bec",
+        "taxonomy_term.e489fa88-6197-492a-95a3-ddf320126c8c",
+        "taxonomy_term.edb52239-f68d-490f-a643-99785dd06a93"
+    ]
+}
