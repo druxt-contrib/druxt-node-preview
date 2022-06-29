@@ -3046,7 +3046,41 @@ drupal-jsonapi-params@^2.0.0:
   dependencies:
     qs "^6.10.3"
 
-druxt@0.19.2:
+druxt-entity@^0.25.0:
+  version "0.25.0"
+  resolved "https://registry.yarnpkg.com/druxt-entity/-/druxt-entity-0.25.0.tgz#f2692676f17de861dd47c777e9243b936c908bc4"
+  integrity sha512-G9NQVxPyUnDLAJU4TqyjDdHVwnTQ1DNbT2g0nqw5idgskNcwGb4TWpR9pm5Fi4yJs3UNpAZ3u5C3HmfqIsXfxw==
+  dependencies:
+    deepmerge "^4.2.2"
+    drupal-jsonapi-params "^2.0.0"
+    druxt "^0.19.0"
+    druxt-router "^0.27.0"
+    druxt-schema "^0.10.4"
+
+druxt-router@^0.27.0:
+  version "0.27.3"
+  resolved "https://registry.yarnpkg.com/druxt-router/-/druxt-router-0.27.3.tgz#4887a16d3ffc34d8360ff7c80b007b226eb7fddf"
+  integrity sha512-aa0WfKWuxkGD+kR7TNdgqE5c+PN5Mn1Dldt3yhXerh5sbkTqOIpR1KrsnBZVjoXQrTKOQHTFsyXa9lUiVuLPdg==
+  dependencies:
+    druxt "^0.19.2"
+    url-parse "^1.5.10"
+  optionalDependencies:
+    vue "^2.6.14"
+    vuex "^3.6.2"
+
+druxt-schema@^0.10.4:
+  version "0.10.4"
+  resolved "https://registry.yarnpkg.com/druxt-schema/-/druxt-schema-0.10.4.tgz#42bb3efe0d8eb769b2bcca9d2cde208aef7e49ea"
+  integrity sha512-2ps0EdqlwI/fOSccamQdV/ZsP+ym2eTflrFLmBS/67FiSne/+xdCDAKxWTD07+wHBJjN0wdCGip6kiY28cY4HA==
+  dependencies:
+    consola "^2.15.3"
+    drupal-jsonapi-params "^2.0.0"
+    druxt "^0.19.0"
+  optionalDependencies:
+    vue "^2.6.14"
+    vuex "^3.6.2"
+
+druxt@0.19.2, druxt@^0.19.0, druxt@^0.19.2:
   version "0.19.2"
   resolved "https://registry.yarnpkg.com/druxt/-/druxt-0.19.2.tgz#842604d0b2cd2f739dfab8fc4af3b1c249ebb232"
   integrity sha512-h/N5F9rEkyA3mOjF9TsLZLByGqOevWkcwKw5jy0NHUEg62n2mK3sse0k5sPuHEunYYgm8UFBHucC8cAJ8GDa1w==
@@ -5881,6 +5915,11 @@ querystring@^0.2.1:
   resolved "https://registry.yarnpkg.com/querystring/-/querystring-0.2.1.tgz#40d77615bb09d16902a85c3e38aa8b5ed761c2dd"
   integrity sha512-wkvS7mL/JMugcup3/rMitHmd9ecIGd2lhFhK9N3UUQ450h66d1r3Y9nvXzQAW1Lq+wyx61k/1pfKS5KuKiyEbg==
 
+querystringify@^2.1.1:
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/querystringify/-/querystringify-2.2.0.tgz#3345941b4153cb9d082d8eee4cda2016a9aef7f6"
+  integrity sha512-FIqgj2EUvTa7R50u0rGsyTftzjYmv/a3hO345bZNrqabNqjtgiDMgmo4mkUjd+nzU5oF3dClKqFIPUKybUyqoQ==
+
 queue-microtask@^1.2.2:
   version "1.2.3"
   resolved "https://registry.yarnpkg.com/queue-microtask/-/queue-microtask-1.2.3.tgz#4929228bbc724dfac43e0efb058caf7b6cfb6243"
@@ -6864,6 +6903,14 @@ urix@^0.1.0:
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/urix/-/urix-0.1.0.tgz#da937f7a62e21fec1fd18d49b35c2935067a6c72"
   integrity sha1-2pN/emLiH+wf0Y1Js1wpNQZ6bHI=
+
+url-parse@^1.5.10:
+  version "1.5.10"
+  resolved "https://registry.yarnpkg.com/url-parse/-/url-parse-1.5.10.tgz#9d3c2f736c1d75dd3bd2be507dcc111f1e2ea9c1"
+  integrity sha512-WypcfiRhfeUP9vvF0j6rw0J3hrWrw6iZv3+22h6iRMJ/8z1Tj6XfLP4DsUix5MhMPnXpiHDoKyoZ/bdCkwBCiQ==
+  dependencies:
+    querystringify "^2.1.1"
+    requires-port "^1.0.0"
 
 use@^3.1.0:
   version "3.1.1"

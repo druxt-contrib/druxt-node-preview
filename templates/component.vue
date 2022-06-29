@@ -6,6 +6,7 @@
         v-model="entity"
         v-bind="props"
       />
+
       <DruxtDebug
         v-else
         summary="An error has occured while access the preview data from your Drupal backend."
@@ -22,6 +23,9 @@
 </template>
 
 <script>
+import DruxtEntity from 'druxt-entity/dist/components/DruxtEntity.vue'
+import DruxtModule from 'druxt/dist/components/DruxtModule.vue'
+
 export default {
   data: () => ({
     entity: false,
@@ -34,7 +38,23 @@ export default {
 
   // Fetch the JSON:API Node Preview data.
   async fetch() {
-    this.$druxt.axios.defaults.withCredentials = true
+    // Get node theme component.
+    const nodePreview = {
+      $options: {
+        components: this.$options.components,
+        druxt: {
+          componentOptions: DruxtEntity.druxt.componentOptions
+        },
+        name: 'DruxtEntity',
+      },
+      mode: this.mode,
+      type: ['node', this.bundle].join('--'),
+    }
+    const options = DruxtModule.methods.getModuleComponents.call(nodePreview)
+    // @TODO - use theme component to determine alter the JSON:API query.
+    // eslint-disable-next-line
+    const component = (((options.filter(o => o.global) || [])[0] || {}).name || 'DruxtWrapper')
+
     try {
       const { data } = await this.$druxt.axios.get(
         this.url,
