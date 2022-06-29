@@ -28,6 +28,9 @@
     "test": "jest",
     "test:watch": "jest --watch"
   },
+  "dependencies": {
+    "chalk": "^5.0.1"
+  },
   "devDependencies": {
     "@babel/core": "7.18.5",
     "@babel/preset-env": "7.18.2",

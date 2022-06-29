@@ -1,4 +1,4 @@
 _core:
   default_config_hash: LTrUq5f2RrcF2_Ui9e4KVgJvH5307cmnquB8O3ySyxY
 langcode: en
-frontends: 'Localhost|http://localhost:3000/node/preview/[view_mode]#[jsonapi_node_preview]'
+frontends: 'Localhost|http://localhost:3000/preview/node/[bundle]/[mode]#[preview]'

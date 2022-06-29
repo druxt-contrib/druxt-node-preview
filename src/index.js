@@ -1,3 +1,4 @@
+import chalk from 'chalk'
 import { resolve } from 'path'
 
 // eslint-disable-next-line no-unused-vars
@@ -17,11 +18,14 @@ const NuxtModule = function (moduleOptions = {}) {
     routes.push({
       name: 'druxt-node-preview',
       // @TODO - Make path configurable.
-      path: '/node/preview/:view_mode',
+      path: '/preview/node/:bundle/:mode',
       component: resolve(this.options.buildDir, 'components/druxt-node-preview.vue'),
       chunkName: 'druxt-node-preview'
     })
   })
+
+  // Add CLI badge.
+  this.options.cli.badgeMessages.push(`${chalk.bold('Node preview:')} ${chalk.blue.underline('/preview/node/[bundle]/[mode]#[url]')}`)
 }
 
 export default NuxtModule

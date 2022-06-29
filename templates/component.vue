@@ -1,7 +1,11 @@
 <template>
   <div class="druxt-node-preview">
     <ClientOnly v-if="!$fetchState.pending">
-      <DruxtEntity v-model="entity" v-bind="props" />
+      <DruxtEntity v-if="entity" v-model="entity" v-bind="props" />
+      <DruxtDebug v-else summary="An error has occured while access the preview data from your Drupal backend.">
+        Copy and paste the raw preview JSON from <a :href="url" target="_blank" v-text="url" /> below to continue:
+        <textarea v-model="model" />
+      </DruxtDebug>
     </ClientOnly>
   </div>
 </template>
@@ -9,8 +13,9 @@
 <script>
 export default {
   data: () => ({
-    entity: {},
+    entity: false,
     response: null,
+    model: undefined,
   }),
 
   // Only fetch on client side so that the client session is used.
@@ -18,6 +23,7 @@ export default {
 
   // Fetch the JSON:API Node Preview data.
   async fetch() {
+    this.$druxt.axios.defaults.withCredentials = true
     try {
       const { data } = await this.$druxt.axios.get(
         this.url,
@@ -32,26 +38,51 @@ export default {
 
   computed: {
     /**
+     * The Preview Node bundle.
+     *
+     * @type {string}
+     */
+    bundle: ({ $route }) => ($route.params || {}).bundle,
+
+    /**
+     * The Preview Node view mode.
+     *
+     * @type {string}
+     */
+    mode: ({ $route }) => ($route.params || {}).mode,
+
+    /**
      * The DruxtEntity props.
      *
      * @type {object}
      */
-    props: ({ $route, url }) => {
-      const parts = url.split('/')
-      if (parts.length < 4) {
-        return undefined
-      }
-
-      return {
-        mode: ($route.params || {}).view_mode,
-        type: [parts[parts.length - 4], parts[parts.length - 3]].join('--')
-      }
-    },
+    props: ({ bundle, mode }) => ({
+      mode,
+      type: ['node', bundle].join('--')
+    }),
 
     /**
-     * The JSON:API Node Preview URL.
+     * The JSON:API Node Preview data URL.
      */
     url: ({ $route }) => ($route.hash || '').substring(1).replace(':/', '://')
+  },
+
+  watch: {
+    model() {
+      try {
+        const data = JSON.parse(this.model)
+        this.entity = (data || {}).data
+        this.response = data
+      } catch(err) {}
+    }
   }
 }
 </script>
+
+<style scoped>
+textarea {
+  display: block !important;
+  height: 50vh;
+  width: 100%;
+}
+</style>
