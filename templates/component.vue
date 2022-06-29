@@ -1,9 +1,20 @@
 <template>
   <div class="druxt-node-preview">
     <ClientOnly v-if="!$fetchState.pending">
-      <DruxtEntity v-if="entity" v-model="entity" v-bind="props" />
-      <DruxtDebug v-else summary="An error has occured while access the preview data from your Drupal backend.">
-        Copy and paste the raw preview JSON from <a :href="url" target="_blank" v-text="url" /> below to continue:
+      <DruxtEntity
+        v-if="entity"
+        v-model="entity"
+        v-bind="props"
+      />
+      <DruxtDebug
+        v-else
+        summary="An error has occured while access the preview data from your Drupal backend."
+      >
+        Copy and paste the raw preview JSON from <a
+          :href="url"
+          target="_blank"
+          v-text="url"
+        /> below to continue:
         <textarea v-model="model" />
       </DruxtDebug>
     </ClientOnly>
@@ -73,7 +84,9 @@ export default {
         const data = JSON.parse(this.model)
         this.entity = (data || {}).data
         this.response = data
-      } catch(err) {}
+      } catch(err) {
+        console.error('Invalid JSON:API Node Preview data detected.')
+      }
     }
   }
 }
