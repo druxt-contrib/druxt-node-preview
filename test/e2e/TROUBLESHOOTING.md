@@ -31,8 +31,9 @@ the fixes; this file explains them so nobody retraces the path.
 - **jsonapi_resources decorates `jsonapi.include_resolver`.** druxt requires
   jsonapi_views, which requires jsonapi_resources, and the decorator does not
   forward jsonapi_node_preview's extra preview argument. Previews then serve
-  saved data and silently drop never saved paragraphs. This stack removes the
-  decorator via the e2e_support module. Reported upstream.
+  saved data and silently drop never saved paragraphs. Fixed on the
+  jsonapi_node_preview merge request this stack consumes: the resolver now
+  derives the preview flag from the route, so decoration cannot drop it.
 - **druxt 1.2.1 fatals against decoupled_router 2.0.7**
   (https://www.drupal.org/i/3618675). The example pins 2.0.6 until druxt
   1.2.2 releases.

@@ -1,19 +1,111 @@
+diff --git a/jsonapi_node_preview.services.yml b/jsonapi_node_preview.services.yml
+index 2543578..b6c014e 100644
+--- a/jsonapi_node_preview.services.yml
++++ b/jsonapi_node_preview.services.yml
+@@ -13,9 +13,13 @@ services:
+     class: Drupal\jsonapi_node_preview\Controller\EntityResource
+     parent: jsonapi.entity_resource
+ 
+-  # Overwrites @jsonapi.include_resolver.
++  # Overwrites @jsonapi.include_resolver. The request stack lets the
++  # resolver detect a preview request from the route, so the behavior
++  # survives modules that decorate this service (like jsonapi_resources)
++  # and drop the extra parameter at the decoration boundary.
+   jsonapi.include_resolver:
+     class: Drupal\jsonapi_node_preview\IncludeResolver
+     arguments:
+       - '@entity_type.manager'
+       - '@jsonapi.entity_access_checker'
++      - '@request_stack'
 diff --git a/src/IncludeResolver.php b/src/IncludeResolver.php
-index 97269eb..00c1cdb 100755
+index 97269eb..1d20e0d 100755
 --- a/src/IncludeResolver.php
 +++ b/src/IncludeResolver.php
-@@ -5,8 +5,10 @@ namespace Drupal\jsonapi_node_preview;
+@@ -5,8 +5,12 @@ namespace Drupal\jsonapi_node_preview;
  use Drupal\jsonapi\IncludeResolver as BaseIncludeResolver;
  use Drupal\Core\Access\AccessResult;
  use Drupal\Core\Entity\EntityInterface;
++use Drupal\Core\Entity\EntityTypeManagerInterface;
 +use Drupal\Core\Entity\RevisionableStorageInterface;
  use Drupal\Core\Field\FieldItemListInterface;
  use Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem;
 +use Drupal\entity_reference_revisions\Plugin\Field\FieldType\EntityReferenceRevisionsItem;
++use Drupal\jsonapi\Access\EntityAccessChecker;
  use Drupal\jsonapi\Exception\EntityAccessDeniedHttpException;
  use Drupal\jsonapi\JsonApiResource\Data;
  use Drupal\jsonapi\JsonApiResource\IncludedData;
-@@ -105,9 +107,19 @@ class IncludeResolver extends BaseIncludeResolver {
+@@ -14,6 +18,7 @@ use Drupal\jsonapi\JsonApiResource\LabelOnlyResourceObject;
+ use Drupal\jsonapi\JsonApiResource\ResourceIdentifierInterface;
+ use Drupal\jsonapi\JsonApiResource\ResourceObject;
+ use Drupal\jsonapi\JsonApiResource\ResourceObjectData;
++use Symfony\Component\HttpFoundation\RequestStack;
+ 
+ /**
+  * Resolves included resources for an entity or collection of entities.
+@@ -25,6 +30,44 @@ use Drupal\jsonapi\JsonApiResource\ResourceObjectData;
+  */
+ class IncludeResolver extends BaseIncludeResolver {
+ 
++  /**
++   * The request stack, when available.
++   *
++   * Optional so that a container which still holds the old two argument
++   * definition keeps working. Without it, preview detection relies on the
++   * explicit parameter alone.
++   *
++   * @var \Symfony\Component\HttpFoundation\RequestStack|null
++   */
++  protected $requestStack;
++
++  /**
++   * Constructs a new IncludeResolver.
++   *
++   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
++   *   The entity type manager.
++   * @param \Drupal\jsonapi\Access\EntityAccessChecker $entity_access_checker
++   *   The entity access checker.
++   * @param \Symfony\Component\HttpFoundation\RequestStack|null $request_stack
++   *   The request stack.
++   */
++  public function __construct(EntityTypeManagerInterface $entity_type_manager, EntityAccessChecker $entity_access_checker, ?RequestStack $request_stack = NULL) {
++    parent::__construct($entity_type_manager, $entity_access_checker);
++    $this->requestStack = $request_stack;
++  }
++
++  /**
++   * Tells whether the current request is a node preview request.
++   *
++   * Decorators of this service (jsonapi_resources, for example) call into
++   * this resolver without the preview parameter, so the parameter alone is
++   * not a reliable signal. The route is.
++   */
++  protected function isPreviewRequest(): bool {
++    $route = $this->requestStack?->getCurrentRequest()?->attributes->get('_route');
++    return is_string($route) && str_ends_with($route, '.individual.preview');
++  }
++
+   /**
+    * {@inheritdoc}
+    *
+@@ -38,6 +81,7 @@ class IncludeResolver extends BaseIncludeResolver {
+    * @throws \Drupal\Core\TypedData\Exception\MissingDataException
+    */
+   public function resolve($data, $include_parameter, bool $in_preview = FALSE) {
++    $in_preview = $in_preview || $this->isPreviewRequest();
+     assert($data instanceof ResourceObject || $data instanceof ResourceObjectData);
+     $data = $data instanceof ResourceObjectData ? $data : new ResourceObjectData([$data], 1);
+     $include_tree = static::toIncludeTree($data, $include_parameter);
+@@ -61,6 +105,9 @@ class IncludeResolver extends BaseIncludeResolver {
+    * @throws \Drupal\Core\TypedData\Exception\MissingDataException
+    */
+   protected function resolveIncludeTree(array $include_tree, Data $data, ?Data $includes = NULL, bool $in_preview = FALSE) {
++    // Decorators call this method directly and cannot pass the preview
++    // parameter, so derive it from the request as well.
++    $in_preview = $in_preview || $this->isPreviewRequest();
+     $includes = is_null($includes) ? new IncludedData([]) : $includes;
+     foreach ($include_tree as $field_name => $children) {
+       $references = [];
+@@ -105,9 +152,19 @@ class IncludeResolver extends BaseIncludeResolver {
            assert($field_item instanceof EntityReferenceItem);
            // CUSTOM MODIFICATION STARTS.
            // $references[$target_type][] = $field_item->get($field_item::mainPropertyName())->getValue();
@@ -36,7 +128,7 @@ index 97269eb..00c1cdb 100755
            // CUSTOM MODIFICATION ENDS.
          }
        }
-@@ -115,38 +127,66 @@ class IncludeResolver extends BaseIncludeResolver {
+@@ -115,38 +172,66 @@ class IncludeResolver extends BaseIncludeResolver {
        // foreach ($references as $target_type => $ids) {
        //   $entity_storage = $this->entityTypeManager->getStorage($target_type);
        //   $targeted_entities = $entity_storage->loadMultiple(array_unique($ids));
@@ -126,10 +218,10 @@ index 97269eb..00c1cdb 100755
          }
 diff --git a/tests/src/Kernel/PreviewIncludeResolverTest.php b/tests/src/Kernel/PreviewIncludeResolverTest.php
 new file mode 100644
-index 0000000..4184441
+index 0000000..3222f2e
 --- /dev/null
 +++ b/tests/src/Kernel/PreviewIncludeResolverTest.php
-@@ -0,0 +1,424 @@
+@@ -0,0 +1,496 @@
 +<?php
 +
 +declare(strict_types=1);
@@ -148,6 +240,7 @@ index 0000000..4184441
 +use Drupal\node\Entity\NodeType;
 +use Drupal\paragraphs\Entity\Paragraph;
 +use Drupal\paragraphs\Entity\ParagraphsType;
++use Symfony\Component\HttpFoundation\Request;
 +
 +/**
 + * Tests that preview includes use the entities held in memory.
@@ -450,6 +543,73 @@ index 0000000..4184441
 +  }
 +
 +  /**
++   * Tests that a preview request is detected from the route.
++   *
++   * Modules like jsonapi_resources decorate the include resolver and call it
++   * without the preview parameter. The resolver must then derive the flag
++   * from the current route, or previews silently serve saved data.
++   */
++  public function testPreviewDetectedFromRoute(): void {
++    $paragraph = Paragraph::create(['type' => 'text', 'field_text' => 'Original']);
++    $paragraph->save();
++    $node = Node::create(['type' => 'article', 'title' => 'Test', 'field_body' => [$paragraph]]);
++    $node->save();
++    $this->referenced($node->get('field_body'), 0)->set('field_text', 'Edited');
++
++    $this->pushRequestWithRoute('jsonapi.node--article.individual.preview');
++    // No third argument: this is how a decorator calls the resolver.
++    $this->assertSame(['Edited'], $this->resolveTexts($node, 'field_body', NULL));
++
++    // The protected method is what a decorator delegates to directly.
++    $resource_type = $this->resourceTypeRepository->get('node', $node->bundle());
++    $resource_object = \Drupal\jsonapi\JsonApiResource\ResourceObject::createFromEntity($resource_type, $node);
++    $data = new \Drupal\jsonapi\JsonApiResource\ResourceObjectData([$resource_object], 1);
++    $tree = ['field_body' => []];
++    $method = new \ReflectionMethod($this->includeResolver, 'resolveIncludeTree');
++    $includes = $method->invoke($this->includeResolver, $tree, $data);
++    $texts = [];
++    foreach ($includes as $included) {
++      if ($included instanceof \Drupal\jsonapi\JsonApiResource\ResourceObject) {
++        $texts[] = (string) $included->getField('field_text')->value;
++      }
++    }
++    $this->assertSame(['Edited'], $texts);
++
++    $this->popRequest();
++  }
++
++  /**
++   * Tests that an ordinary route never turns preview detection on.
++   */
++  public function testOrdinaryRouteIsNotAPreview(): void {
++    $paragraph = Paragraph::create(['type' => 'text', 'field_text' => 'Original']);
++    $paragraph->save();
++    $node = Node::create(['type' => 'article', 'title' => 'Test', 'field_body' => [$paragraph]]);
++    $node->save();
++    $this->referenced($node->get('field_body'), 0)->set('field_text', 'Edited');
++
++    $this->pushRequestWithRoute('jsonapi.node--article.individual');
++    $this->assertSame(['Original'], $this->resolveTexts($node, 'field_body', NULL));
++    $this->popRequest();
++  }
++
++  /**
++   * Pushes a request carrying a route name onto the request stack.
++   */
++  protected function pushRequestWithRoute(string $route): void {
++    $request = Request::create('/');
++    $request->attributes->set('_route', $route);
++    $this->container->get('request_stack')->push($request);
++  }
++
++  /**
++   * Pops the pushed request.
++   */
++  protected function popRequest(): void {
++    $this->container->get('request_stack')->pop();
++  }
++
++  /**
 +   * Resolves includes for a node.
 +   *
 +   * @param \Drupal\node\Entity\Node $node
@@ -462,9 +622,13 @@ index 0000000..4184441
 +   * @return \Drupal\jsonapi\JsonApiResource\IncludedData
 +   *   The resolved includes.
 +   */
-+  protected function resolve(Node $node, string $include, bool $in_preview = TRUE) {
++  protected function resolve(Node $node, string $include, ?bool $in_preview = TRUE) {
 +    $resource_type = $this->resourceTypeRepository->get('node', $node->bundle());
 +    $resource_object = ResourceObject::createFromEntity($resource_type, $node);
++    if ($in_preview === NULL) {
++      // Call without the parameter, the way a decorator does.
++      return $this->includeResolver->resolve($resource_object, $include);
++    }
 +    return $this->includeResolver->resolve($resource_object, $include, $in_preview);
 +  }
 +
@@ -481,7 +645,7 @@ index 0000000..4184441
 +   * @return string[]
 +   *   The field_text value of each included paragraph.
 +   */
-+  protected function resolveTexts(Node $node, string $include, bool $in_preview = TRUE): array {
++  protected function resolveTexts(Node $node, string $include, ?bool $in_preview = TRUE): array {
 +    $texts = [];
 +    foreach ($this->resolve($node, $include, $in_preview) as $included) {
 +      if ($included instanceof ResourceObject && $included->getResourceType()->getEntityTypeId() === 'paragraph') {

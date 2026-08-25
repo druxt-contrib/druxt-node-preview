@@ -37,6 +37,8 @@ echo "==> Building Drupal (example/drupal)"
 cd "$ROOT/example/drupal"
 # Always resolve fresh: the example has no committed lock file.
 composer update --no-interaction --no-progress
+# composer-patches does not notice changed patch content, so reapply.
+composer reinstall drupal/jsonapi_node_preview --no-interaction 2>/dev/null || true
 # Make repeat runs idempotent.
 chmod -R u+w web/sites/default 2>/dev/null || true
 # Absolute path: a relative sqlite path resolves against the PHP process
@@ -51,11 +53,6 @@ vendor/bin/drush site:install standard -y --db-url="$DB" --account-name=admin -q
 vendor/bin/drush pm:install consumer_node_preview paragraphs druxt -y -q
 # The Druxt frontend builds its schema over JSON:API as anonymous.
 vendor/bin/drush role:perm:add anonymous 'access druxt resources' -q
-# See test/e2e/drupal/e2e_support: drops jsonapi_resources' include
-# resolver decorator, which otherwise breaks preview includes.
-mkdir -p web/modules/custom
-cp -r "$ROOT/test/e2e/drupal/e2e_support" web/modules/custom/
-vendor/bin/drush pm:install e2e_support -y -q
 cp "$ROOT/test/e2e/drupal/services.e2e.yml" web/sites/default/services.yml
 sed -i "s/localhost:3111/localhost:$FRONTEND_DRUXT_PORT/; s/localhost:3112/localhost:$FRONTEND_STATIC_PORT/" web/sites/default/services.yml
 vendor/bin/drush php:script "$ROOT/test/e2e/drupal/setup.php" -- \
