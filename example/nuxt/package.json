@@ -1,0 +1,13 @@
+{
+  "name": "druxt-node-preview-example-nuxt",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "start": "nuxt start"
+  },
+  "dependencies": {
+    "druxt-site": "^0.9.0",
+    "nuxt": "^2.17.0"
+  }
+}
