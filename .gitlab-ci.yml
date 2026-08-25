@@ -1,0 +1,85 @@
+################
+# Druxt contrib private GitLab pipeline.
+#
+# GitHub Actions is the canonical CI for Druxt npm modules. This pipeline is
+# the additive private gate: while the module lives only on that GitLab it is the
+# only gate, and once mirrored to GitHub nothing publishes to npm unless the
+# same commit is green here and there. Style follows druxt/druxt.js.
+################
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+image: node:16.20.1
+
+stages:
+  - lint
+  - test
+
+.npm-cache: &npm-cache
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+
+lint:js:
+  stage: lint
+  <<: *npm-cache
+  script:
+    - npm run lint
+
+lint:audit:
+  stage: lint
+  script:
+    # Full audit reports only. The production audit blocks.
+    - npm audit || true
+    - npm audit --omit=dev
+
+test:unit:
+  stage: test
+  <<: *npm-cache
+  script:
+    - npx jest --runInBand --reporters=default --reporters=jest-junit
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+
+test:build:
+  stage: test
+  <<: *npm-cache
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+# The e2e stack needs PHP, composer and a Playwright browser, which the
+# shared node image does not carry. Manual until the local runners are
+# proven to cope; run it locally with test/e2e/run.sh in the meantime.
+test:e2e:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.62.1-noble
+  when: manual
+  allow_failure: true
+  script:
+    - apt-get update && apt-get install -y -q php php-cli php-sqlite3 php-gd php-xml php-mbstring php-curl composer
+    - npm ci
+    - test/e2e/run.sh
+  artifacts:
+    when: always
+    reports:
+      junit: test/e2e/reports/junit.xml
+    paths:
+      - test/e2e/reports/
+      - test-results/
+    expire_in: 1 week

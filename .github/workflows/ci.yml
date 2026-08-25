@@ -1,0 +1,119 @@
+# Druxt contrib standard CI. Reference implementation.
+#
+# GitHub Actions is the canonical CI for Druxt npm modules; a private GitLab runs
+# an additive private pipeline (.gitlab-ci.yml). Publish to npm only from a
+# commit green on both. This file follows druxt core's modernized ci.yml and
+# is intended to collapse into a reusable workflow_call in
+# druxt-contrib/.github once that repo exists.
+name: ci
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 16.20.1
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  lint:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Full audit reports only. The production audit blocks.
+      - run: npm audit || true
+      - run: npm audit --omit=dev
+
+  unit:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx jest --runInBand --reporters=default --reporters=jest-junit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-unit
+          path: junit.xml
+          if-no-files-found: ignore
+
+  e2e:
+    # The e2e stack needs PHP and composer for the Drupal side, and a newer
+    # Node for Playwright. The module's own frozen toolchain is not involved:
+    # this job tests the built contract end to end.
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, pdo_sqlite
+          tools: composer
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the end to end suite
+        run: test/e2e/run.sh
+        env:
+          E2E_DRUXT: ${{ vars.E2E_DRUXT || '0' }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-artifacts
+          path: |
+            test/e2e/reports
+            test-results
+          if-no-files-found: ignore
