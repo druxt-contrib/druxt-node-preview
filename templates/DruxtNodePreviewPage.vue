@@ -1,5 +1,10 @@
 <template>
-  <div class="druxt-node-preview">
+  <div
+    class="druxt-node-preview"
+    :data-view-mode="viewMode"
+    :data-entity-type="entity && entity.type"
+    :data-entity-uuid="entity && entity.id"
+  >
     <div
       v-if="error"
       class="druxt-node-preview-error"

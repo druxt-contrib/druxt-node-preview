@@ -5,7 +5,9 @@ A paired Drupal and Nuxt setup for trying the preview flow end to end.
 ## Drupal
 
 `drupal/composer.json` builds a Drupal site with the two required modules.
-Consumer Node Preview comes from its GitHub repository until it is released.
+Until it is released, Consumer Node Preview comes from a branch of its GitHub
+repository. Once it publishes, replace the vcs repository with a normal
+release constraint.
 
 ```sh
 cd drupal

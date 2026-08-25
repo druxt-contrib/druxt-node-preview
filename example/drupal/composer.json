@@ -4,27 +4,33 @@
     "type": "project",
     "license": "GPL-2.0-or-later",
     "repositories": {
-        "drupal": {
-            "type": "composer",
-            "url": "https://packages.drupal.org/8"
-        },
         "consumer_node_preview": {
             "type": "vcs",
             "url": "https://github.com/Decipher/consumer_node_preview.git"
+        },
+        "drupal": {
+            "type": "composer",
+            "url": "https://packages.drupal.org/8"
         }
     },
     "require": {
         "drupal/core-composer-scaffold": "^11",
         "drupal/core-recommended": "^11",
-        "drupal/consumer_node_preview": "1.0.x-dev",
+        "drupal/consumer_node_preview": "dev-feature/1-preview-targets",
         "drupal/jsonapi_node_preview": "^1.0@beta",
         "drupal/paragraphs": "^1.17",
-        "drush/drush": "^13"
+        "drush/drush": "^13",
+        "cweagans/composer-patches": "^1.7",
+        "composer/installers": "^2"
     },
     "config": {
         "allow-plugins": {
             "composer/installers": true,
-            "drupal/core-composer-scaffold": true
+            "drupal/core-composer-scaffold": true,
+            "cweagans/composer-patches": true,
+            "symfony/runtime": true,
+            "php-http/discovery": true,
+            "tbachert/spi": true
         }
     },
     "extra": {
@@ -34,8 +40,19 @@
             }
         },
         "installer-paths": {
-            "web/core": ["type:drupal-core"],
-            "web/modules/contrib/{$name}": ["type:drupal-module"]
+            "web/core": [
+                "type:drupal-core"
+            ],
+            "web/modules/contrib/{$name}": [
+                "type:drupal-module"
+            ]
+        },
+        "patches": {
+            "drupal/jsonapi_node_preview": {
+                "#3367724: load included references from memory and by revision": "patches/3367724-include-resolver.patch"
+            }
         }
-    }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
 }
