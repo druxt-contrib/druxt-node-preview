@@ -70,6 +70,8 @@ echo "==> Building Drupal (example/drupal)"
 cd "$ROOT/example/drupal"
 # Always resolve fresh: the example has no committed lock file.
 composer update --no-interaction --no-progress
+# composer-patches does not notice changed patch content, so reapply.
+composer reinstall drupal/jsonapi_node_preview --no-interaction
 # Make repeat runs idempotent.
 chmod -R u+w web/sites/default 2>/dev/null || true
 # Absolute path: a relative sqlite path resolves against the PHP process
@@ -103,7 +105,9 @@ echo "==> Starting Drupal on :$DRUPAL_PORT"
 # request served from the wrong directory writes empty discovery results
 # into the persistent cache, which poisons every later request.
 pushd "$ROOT/example/drupal/web" >/dev/null
-setsid php -S "localhost:$DRUPAL_PORT" "$ROOT/example/drupal/web/.ht.router.php" > "$ROOT/test/e2e/reports/drupal-server.log" 2>&1 &
+# Bind 127.0.0.1, not localhost: php -S localhost can bind only ::1, while
+# Node resolves localhost to 127.0.0.1. Browsers try both addresses.
+setsid php -S "127.0.0.1:$DRUPAL_PORT" "$ROOT/example/drupal/web/.ht.router.php" > "$ROOT/test/e2e/reports/drupal-server.log" 2>&1 &
 PIDS+=($!)
 popd >/dev/null
 
@@ -116,11 +120,17 @@ DRUXT_URL=""
 if [ "$E2E_DRUXT" = "1" ]; then
   echo "==> Starting the Druxt frontend on :$FRONTEND_DRUXT_PORT"
   cd "$ROOT/example/nuxt"
+  # A stale build dir keeps a schema from an older Drupal. Always rebuild.
+  rm -rf .nuxt
   npm install --no-audit --no-fund
-  # Nuxt 2 uses webpack 4, whose md4 hashing needs the legacy OpenSSL
-  # provider on Node 17 and later.
-  NODE_OPTIONS="--openssl-legacy-provider" \
-  DRUPAL_BASE_URL="http://localhost:$DRUPAL_PORT" setsid npx nuxt dev --port "$FRONTEND_DRUXT_PORT" > "$ROOT/test/e2e/reports/nuxt-dev.log" 2>&1 &
+  # The Druxt toolchain is frozen on Node 16 (see .nvmrc): druxt-schema does
+  # not generate schemas on newer Node, and fails without saying so. Playwright
+  # needs Node 20 or later, so mise runs the frontend on Node 16 beside it.
+  if ! command -v mise >/dev/null 2>&1; then
+    echo "The Druxt tier needs mise, to run its frontend on Node 16 while Playwright runs on Node 20 or later."
+    exit 1
+  fi
+  DRUPAL_BASE_URL="http://localhost:$DRUPAL_PORT" setsid mise x node@16.20.1 -- npx nuxt dev --port "$FRONTEND_DRUXT_PORT" > "$ROOT/test/e2e/reports/nuxt-dev.log" 2>&1 &
   PIDS+=($!)
   DRUXT_URL="http://localhost:$FRONTEND_DRUXT_PORT"
 fi

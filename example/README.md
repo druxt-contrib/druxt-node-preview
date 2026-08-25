@@ -54,7 +54,7 @@ Then:
 
 ## Nuxt
 
-The Nuxt app runs on Node 16.
+The Nuxt app runs on Node 16, as the repository's `.nvmrc` says.
 
 ```sh
 cd nuxt

@@ -94,7 +94,7 @@ describe('$druxtNodePreview plugin', () => {
 
   test('fetch throws on a failed response', async () => {
     const { injected } = buildPlugin()
-    window.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403 })
+    window.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
     await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow('403')
   })
 

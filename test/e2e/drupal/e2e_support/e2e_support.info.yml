@@ -1,0 +1,5 @@
+name: E2E Support
+type: module
+description: Workarounds the e2e stack needs. Never install on a real site.
+package: Testing
+core_version_requirement: ^10.3 || ^11
