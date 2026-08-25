@@ -67,6 +67,9 @@ https://frontend.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_pre
   `cookie_samesite: None` for the session cookie.
 - The preview page only works in the browser. The fragment never reaches the
   server, so there is no server side rendering of previews, by design.
+- Paragraphs come through unsaved only with the JSON:API Node Preview include
+  resolver fixes from https://www.drupal.org/i/3367724, until a release has
+  them. `example/drupal/composer.json` applies them with composer-patches.
 
 ## Example
 

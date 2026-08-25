@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview Frontend</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 720px; margin-inline: auto; }
+  .badge { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 600; }
+  .ok { background: #d1f7d1; color: #114411; }
+  .err { background: #fddcdc; color: #611; }
+  .meta { color: #888; font-size: .85rem; }
+  .para { border-left: 4px solid #7aa; padding: .6rem 1rem; margin: .8rem 0; background: rgba(120,170,170,.08); border-radius: 0 8px 8px 0; }
+  body.vm-teaser .para { border-left-color: #ca7; background: rgba(204,170,120,.1); font-style: italic; }
+  .vm-note { font-size: .8rem; color: #a80; }
+  h1 { margin-bottom: .2rem; }
+  pre { overflow-x: auto; background: rgba(128,128,128,.1); padding: 1rem; border-radius: 8px; font-size: .75rem; }
+  details { margin-top: 2rem; }
+</style>
+</head>
+<body>
+<p class="badge" id="status">loading…</p>
+<p class="meta">This page is the decoupled frontend. It reads the JSON:API preview
+endpoint from the URL fragment and fetches it with the editor's Drupal session.
+View mode: <strong id="vm">?</strong></p>
+<h1 id="title">…</h1>
+<div id="paras"></div>
+<details><summary>Raw JSON:API document</summary><pre id="raw"></pre></details>
+<script>
+(async () => {
+  const status = document.getElementById('status');
+  const endpoint = decodeURIComponent(location.hash.slice(1));
+  const vm = new URLSearchParams(location.search).get('vm') || 'full';
+  document.getElementById('vm').textContent = vm;
+  document.body.classList.add('vm-' + vm);
+  if (!endpoint) { status.textContent = 'no endpoint in fragment'; status.className = 'badge err'; return; }
+  try {
+    const url = endpoint + (endpoint.includes('?') ? '&' : '?') + 'include=field_body';
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: { 'Accept': 'application/vnd.api+json' },
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const doc = await res.json();
+    document.getElementById('raw').textContent = JSON.stringify(doc, null, 2);
+    document.getElementById('title').textContent = doc.data.attributes.title;
+    const included = new Map((doc.included || []).map(i => [i.id, i]));
+    const refs = (doc.data.relationships?.field_body?.data) || [];
+    const paras = document.getElementById('paras');
+    if (!refs.length) paras.innerHTML = '<p class="meta">(no paragraphs on field_body)</p>';
+    // The view mode token drives the frontend's rendering variant. Teaser
+    // renders only the first paragraph, the way a listing card would.
+    const shown = vm === 'teaser' ? refs.slice(0, 1) : refs;
+    if (vm === 'teaser' && refs.length > 1) {
+      const note = document.createElement('p');
+      note.className = 'vm-note';
+      note.textContent = 'teaser view mode: showing 1 of ' + refs.length + ' paragraphs';
+      paras.appendChild(note);
+    }
+    for (const ref of shown) {
+      const p = included.get(ref.id);
+      const div = document.createElement('div');
+      div.className = 'para';
+      div.textContent = p ? (p.attributes.field_text ?? '(empty field_text)') : '(missing from included!)';
+      paras.appendChild(div);
+    }
+    status.textContent = 'preview fetched with credentials (' + refs.length + ' paragraph refs, ' + (doc.included||[]).length + ' included)';
+    status.className = 'badge ok';
+  } catch (e) {
+    status.textContent = 'fetch failed: ' + e.message + ' (CORS? not logged in? see console)';
+    status.className = 'badge err';
+  }
+})();
+</script>
+</body>
+</html>
