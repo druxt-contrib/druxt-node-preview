@@ -24,6 +24,12 @@ Then:
 3. Allow the frontend origin in `services.yml` CORS with credentials, and set
    `cookie_samesite: None`.
 
+### Known pin
+
+`drupal/decoupled_router` is pinned to 2.0.6: druxt 1.2.1 fatals against
+2.0.7 (see https://www.drupal.org/i/3618675). Drop the pin when druxt 1.2.2
+releases.
+
 ## Nuxt
 
 ```sh

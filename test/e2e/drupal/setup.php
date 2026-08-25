@@ -53,6 +53,11 @@ $displays->getFormDisplay('node', 'e2e_article')->setComponent('field_body', ['t
 $displays->getViewDisplay('node', 'e2e_article')->setComponent('field_body', [
   'type' => 'entity_reference_revisions_entity_view', 'label' => 'hidden', 'weight' => 10,
 ])->save();
+// The full display: Drupal previews default to the full view mode, and the
+// Druxt frontend resolves its schema per actual display.
+$displays->getViewDisplay('node', 'e2e_article', 'full')->setComponent('field_body', [
+  'type' => 'entity_reference_revisions_entity_view', 'label' => 'hidden', 'weight' => 10,
+])->save();
 // A second view display, so the preview bar shows the view mode selector.
 $displays->getViewDisplay('node', 'e2e_article', 'teaser')->setComponent('field_body', [
   'type' => 'entity_reference_revisions_entity_view', 'label' => 'hidden', 'weight' => 10,

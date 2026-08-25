@@ -21,7 +21,9 @@
         "drupal/paragraphs": "^1.17",
         "drush/drush": "^13",
         "cweagans/composer-patches": "^1.7",
-        "composer/installers": "^2"
+        "composer/installers": "^2",
+        "drupal/druxt": "^1.2",
+        "drupal/decoupled_router": "2.0.6"
     },
     "config": {
         "allow-plugins": {

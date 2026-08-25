@@ -1,6 +1,9 @@
+import { resolve } from 'path'
+
 export default {
   modules: [
-    '../../src/index.js',
+    // The module under test, straight from the repo source.
+    resolve(__dirname, '../../src/index.js'),
     'druxt-site',
   ],
   druxt: {

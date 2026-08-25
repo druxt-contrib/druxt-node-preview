@@ -48,13 +48,21 @@ DB_FILE="${TMPDIR:-/tmp}/druxt_node_preview_e2e.sqlite"
 DB="sqlite://localhost/$DB_FILE"
 rm -f web/sites/default/settings.php "$DB_FILE" "$DB_FILE-wal" "$DB_FILE-shm"
 vendor/bin/drush site:install standard -y --db-url="$DB" --account-name=admin -q
-vendor/bin/drush pm:install consumer_node_preview paragraphs -y -q
+vendor/bin/drush pm:install consumer_node_preview paragraphs druxt -y -q
+# The Druxt frontend builds its schema over JSON:API as anonymous.
+vendor/bin/drush role:perm:add anonymous 'access druxt resources' -q
+# See test/e2e/drupal/e2e_support: drops jsonapi_resources' include
+# resolver decorator, which otherwise breaks preview includes.
+mkdir -p web/modules/custom
+cp -r "$ROOT/test/e2e/drupal/e2e_support" web/modules/custom/
+vendor/bin/drush pm:install e2e_support -y -q
 cp "$ROOT/test/e2e/drupal/services.e2e.yml" web/sites/default/services.yml
 sed -i "s/localhost:3111/localhost:$FRONTEND_DRUXT_PORT/; s/localhost:3112/localhost:$FRONTEND_STATIC_PORT/" web/sites/default/services.yml
 vendor/bin/drush php:script "$ROOT/test/e2e/drupal/setup.php" -- \
   "http://localhost:$FRONTEND_DRUXT_PORT" "http://localhost:$FRONTEND_STATIC_PORT"
 vendor/bin/drush cache:rebuild -q
 
+mkdir -p "$ROOT/test/e2e/reports"
 echo "==> Starting Drupal on :$DRUPAL_PORT"
 # The server must run with the web root as its working directory and an
 # absolute router path. Drupal resolves twig templates, plugin discovery
@@ -62,7 +70,9 @@ echo "==> Starting Drupal on :$DRUPAL_PORT"
 # request served from the wrong directory writes empty discovery results
 # into the persistent cache, which poisons every later request.
 pushd "$ROOT/example/drupal/web" >/dev/null
-php -S "localhost:$DRUPAL_PORT" "$ROOT/example/drupal/web/.ht.router.php" >/dev/null 2>&1 &
+# Bind on all IPv4: the browser resolves localhost to ::1 or 127.0.0.1
+# depending on the client, and Node resolves it to 127.0.0.1.
+php -S "0.0.0.0:$DRUPAL_PORT" "$ROOT/example/drupal/web/.ht.router.php" > "$ROOT/test/e2e/reports/drupal-server.log" 2>&1 &
 PIDS+=($!)
 popd >/dev/null
 
@@ -75,11 +85,18 @@ DRUXT_URL=""
 if [ "$E2E_DRUXT" = "1" ]; then
   echo "==> Starting the Druxt frontend on :$FRONTEND_DRUXT_PORT"
   cd "$ROOT/example/nuxt"
+  # A stale build dir keeps a schema from an older Drupal. Always rebuild.
+  rm -rf .nuxt
   npm install --no-audit --no-fund
-  # Nuxt 2 uses webpack 4, whose md4 hashing needs the legacy OpenSSL
-  # provider on Node 17 and later.
-  NODE_OPTIONS="--openssl-legacy-provider" \
-  DRUPAL_BASE_URL="http://localhost:$DRUPAL_PORT" npx nuxt dev --port "$FRONTEND_DRUXT_PORT" > "$ROOT/test/e2e/reports/nuxt-dev.log" 2>&1 &
+  # The Druxt toolchain is frozen on Node 16 (see .nvmrc): druxt-schema does
+  # not generate schemas on newer Node. Use mise to run the frontend on it
+  # when available, with the legacy OpenSSL fallback otherwise.
+  if command -v mise >/dev/null 2>&1; then
+    DRUPAL_BASE_URL="http://localhost:$DRUPAL_PORT" mise x node@16.20.1 -- npx nuxt dev --port "$FRONTEND_DRUXT_PORT" > "$ROOT/test/e2e/reports/nuxt-dev.log" 2>&1 &
+  else
+    NODE_OPTIONS="--openssl-legacy-provider" \
+    DRUPAL_BASE_URL="http://localhost:$DRUPAL_PORT" npx nuxt dev --port "$FRONTEND_DRUXT_PORT" > "$ROOT/test/e2e/reports/nuxt-dev.log" 2>&1 &
+  fi
   PIDS+=($!)
   DRUXT_URL="http://localhost:$FRONTEND_DRUXT_PORT"
 fi

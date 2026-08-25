@@ -37,6 +37,15 @@ describe('$druxtNodePreview plugin', () => {
     expect(injected.value.endpoint()).toBe(null)
   })
 
+  test('endpoint repairs a scheme collapsed by the router', () => {
+    const { injected } = buildPlugin()
+    window.location.hash = '#http:/example.com/jsonapi/node/a/b/preview'
+    expect(injected.value.endpoint()).toBe('http://example.com/jsonapi/node/a/b/preview')
+    window.location.hash = '#https://example.com/ok'
+    expect(injected.value.endpoint()).toBe('https://example.com/ok')
+    window.location.hash = ''
+  })
+
   test('fetch adds the include and credentials', async () => {
     const { injected } = buildPlugin()
     const doc = { data: { type: 'node--article', id: 'abc' } }
@@ -53,7 +62,7 @@ describe('$druxtNodePreview plugin', () => {
 
   test('fetch throws on a failed response', async () => {
     const { injected } = buildPlugin()
-    window.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403 })
+    window.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
     await expect(injected.value.fetch('https://example.com/preview')).rejects.toThrow('403')
   })
 

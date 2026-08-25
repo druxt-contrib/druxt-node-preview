@@ -18,7 +18,10 @@ export default ({ store }, inject) => {
      */
     endpoint: () => {
       const hash = (window.location.hash || '').slice(1)
-      return hash ? decodeURIComponent(hash) : null
+      if (!hash) return null
+      // Routers like vue-router normalize the URL and collapse the double
+      // slash after the scheme inside the fragment. Repair it.
+      return decodeURIComponent(hash).replace(/^(https?):\/(?!\/)/, '$1://')
     },
 
     /**
@@ -38,7 +41,9 @@ export default ({ store }, inject) => {
         headers: { Accept: 'application/vnd.api+json' },
       })
       if (!response.ok) {
-        throw new Error('Preview request failed with HTTP ' + response.status)
+        // Carry the start of the body: a bare status is hard to act on.
+        const body = (await response.text().catch(() => '')).slice(0, 300)
+        throw new Error('Preview request failed with HTTP ' + response.status + ' for ' + url + (body ? ': ' + body : ''))
       }
       return response.json()
     },
