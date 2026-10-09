@@ -28,7 +28,10 @@ describe('DruxtNodePreview module', () => {
     NuxtModule.call(context)
 
     expect(context.options.store).toBe(true)
-    expect(context.addedTemplates).toHaveLength(1)
+    expect(context.addedTemplates.map((t) => t.fileName)).toEqual([
+      'components/druxt-node-preview.vue',
+      'components/druxt-node-preview-page.vue',
+    ])
     expect(context.addedPlugins).toHaveLength(1)
     expect(context.routes).toHaveLength(1)
     expect(context.routes[0].path).toBe('/druxt/node/preview')

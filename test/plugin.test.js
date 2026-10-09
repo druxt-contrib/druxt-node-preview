@@ -22,6 +22,9 @@ const P1 = '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e'
 const P2 = '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f'
 const ENDPOINT = `https://example.com/jsonapi/node/article/${UUID}/preview`
 
+/** A JSON:API response, as the Druxt client resolves it. */
+const axiosJsonApi = (doc, type = 'application/vnd.api+json') => ({ data: doc, headers: { 'content-type': type } })
+
 /** A JSON:API response, as window.fetch resolves it. */
 const jsonApi = (doc, type = 'application/vnd.api+json') => ({
   ok: true,
@@ -29,12 +32,18 @@ const jsonApi = (doc, type = 'application/vnd.api+json') => ({
   json: async () => doc,
 })
 
-const buildPlugin = () => {
+const buildPlugin = (app = {}) => {
   const commits = []
-  const store = { commit: (name, payload) => commits.push({ name, payload }) }
+  const modules = {}
+  const store = {
+    state: {},
+    commit: (name, payload) => commits.push({ name, payload }),
+    hasModule: (name) => !!modules[name],
+    registerModule: (name, module) => { modules[name] = module },
+  }
   let injected
-  loadPlugin().default({ store }, (name, value) => { injected = { name, value } })
-  return { commits, injected }
+  loadPlugin().default({ app, store }, (name, value) => { injected = { name, value } })
+  return { commits, injected, modules }
 }
 
 describe('$druxtNodePreview plugin', () => {
@@ -52,7 +61,56 @@ describe('$druxtNodePreview plugin', () => {
     expect(injected.value.endpoint()).toBe(null)
   })
 
-  test('fetch adds the include and credentials', async () => {
+  test('registers the preview store module', () => {
+    const { modules } = buildPlugin()
+    const state = modules.druxtNodePreview.state()
+    expect(state).toEqual({ active: false, uuid: null })
+    modules.druxtNodePreview.mutations.start(state, 'abc')
+    expect(state).toEqual({ active: true, uuid: 'abc' })
+  })
+
+  test('fetch goes through the Druxt client with credentials', async () => {
+    const doc = { data: { type: 'node--article', id: UUID } }
+    const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+
+    const result = await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+
+    expect(get).toHaveBeenCalledWith(
+      window.location.origin + `/jsonapi/node/article/${UUID}/preview?include=field_body`,
+      expect.objectContaining({ withCredentials: true }),
+    )
+    expect(result).toBe(doc)
+  })
+
+  test('fetch through the client refuses an origin that is not allowed', async () => {
+    const get = jest.fn()
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await expect(injected.value.fetch('https://evil.example/doc.json')).rejects.toThrow('not on this site')
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  test('fetch keeps an include the endpoint already has', async () => {
+    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch(`${ENDPOINT}?include=field_content`)
+    expect(get.mock.calls[0][0]).toBe(`${ENDPOINT}?include=field_content`)
+  })
+
+  test('fetch through the client refuses a response that is not JSON:API', async () => {
+    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }, 'text/plain'))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow('not a JSON:API document')
+  })
+
+  test('fetch through the client reports the status and body', async () => {
+    const error = Object.assign(new Error('x'), { response: { status: 403, data: { errors: [{ title: 'denied' }] } } })
+    const get = jest.fn().mockRejectedValue(error)
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(/403.*denied/)
+  })
+
+  test('fetch without the Druxt client adds the include and credentials', async () => {
     const { injected } = buildPlugin()
     const doc = { data: { type: 'node--article', id: UUID } }
     window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
@@ -111,7 +169,8 @@ describe('$druxtNodePreview plugin', () => {
     const entity = injected.value.seed(doc)
 
     expect(entity).toEqual({ type: 'node--article', id: UUID })
-    expect(commits).toHaveLength(3)
+    expect(commits).toHaveLength(4)
+    expect(commits[3]).toEqual({ name: 'druxtNodePreview/start', payload: UUID })
     expect(commits[0]).toEqual({ name: 'druxt/addResource', payload: { resource: { data: doc.data } } })
     expect(commits[2].payload.resource.data.id).toBe(P2)
   })

@@ -38,9 +38,9 @@
     "lint": "eslint --ext .js,.vue src templates test",
     "prepack": "npm run build",
     "test": "jest",
-    "test:watch": "jest --watch",
     "test:e2e": "playwright test",
-    "test:e2e:stack": "test/e2e/run.sh"
+    "test:e2e:stack": "test/e2e/run.sh",
+    "test:watch": "jest --watch"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
@@ -61,7 +61,7 @@
     "vue-template-compiler": "2.7.14"
   },
   "peerDependencies": {
-    "druxt": "^0.21.0"
+    "druxt": ">=0.21.0 <1"
   },
   "packageManager": "npm@8.19.4",
   "engines": {
