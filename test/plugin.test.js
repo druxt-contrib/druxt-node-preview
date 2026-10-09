@@ -14,12 +14,18 @@ const loadPlugin = () => {
   return mod.exports
 }
 
-const buildPlugin = () => {
+const buildPlugin = (app = {}) => {
   const commits = []
-  const store = { commit: (name, payload) => commits.push({ name, payload }) }
+  const modules = {}
+  const store = {
+    state: {},
+    commit: (name, payload) => commits.push({ name, payload }),
+    hasModule: (name) => !!modules[name],
+    registerModule: (name, module) => { modules[name] = module },
+  }
   let injected
-  loadPlugin().default({ store }, (name, value) => { injected = { name, value } })
-  return { commits, injected }
+  loadPlugin().default({ app, store }, (name, value) => { injected = { name, value } })
+  return { commits, injected, modules }
 }
 
 describe('$druxtNodePreview plugin', () => {
@@ -46,7 +52,43 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = ''
   })
 
-  test('fetch adds the include and credentials', async () => {
+  test('registers the preview store module', () => {
+    const { modules } = buildPlugin()
+    const state = modules.druxtNodePreview.state()
+    expect(state).toEqual({ active: false, uuid: null })
+    modules.druxtNodePreview.mutations.start(state, 'abc')
+    expect(state).toEqual({ active: true, uuid: 'abc' })
+  })
+
+  test('fetch goes through the Druxt client with credentials', async () => {
+    const doc = { data: { type: 'node--article', id: 'abc' } }
+    const get = jest.fn().mockResolvedValue({ data: doc })
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+
+    const result = await injected.value.fetch('/jsonapi/node/article/abc/preview')
+
+    expect(get).toHaveBeenCalledWith(
+      window.location.origin + '/jsonapi/node/article/abc/preview?include=field_body',
+      expect.objectContaining({ withCredentials: true }),
+    )
+    expect(result).toBe(doc)
+  })
+
+  test('fetch keeps an include the endpoint already has', async () => {
+    const get = jest.fn().mockResolvedValue({ data: {} })
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch('https://example.com/preview?include=field_content')
+    expect(get.mock.calls[0][0]).toBe('https://example.com/preview?include=field_content')
+  })
+
+  test('fetch through the client reports the status and body', async () => {
+    const error = Object.assign(new Error('x'), { response: { status: 403, data: { errors: [{ title: 'denied' }] } } })
+    const get = jest.fn().mockRejectedValue(error)
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await expect(injected.value.fetch('https://example.com/preview')).rejects.toThrow(/403.*denied/)
+  })
+
+  test('fetch without the Druxt client adds the include and credentials', async () => {
     const { injected } = buildPlugin()
     const doc = { data: { type: 'node--article', id: 'abc' } }
     window.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => doc })
@@ -79,7 +121,8 @@ describe('$druxtNodePreview plugin', () => {
     const entity = injected.value.seed(doc)
 
     expect(entity).toEqual({ type: 'node--article', id: 'abc' })
-    expect(commits).toHaveLength(3)
+    expect(commits).toHaveLength(4)
+    expect(commits[3]).toEqual({ name: 'druxtNodePreview/start', payload: 'abc' })
     expect(commits[0]).toEqual({ name: 'druxt/addResource', payload: { resource: { data: doc.data } } })
     expect(commits[2].payload.resource.data.id).toBe('p2')
   })

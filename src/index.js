@@ -12,6 +12,9 @@ import { resolve } from 'path'
  *
  *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]
  *
+ * The route is named `druxt-node-preview`. The name is public: a site may
+ * hook it, so it does not change.
+ *
  * @param {object} moduleOptions - Nuxt module options.
  */
 const NuxtModule = function (moduleOptions = {}) {
@@ -24,6 +27,12 @@ const NuxtModule = function (moduleOptions = {}) {
 
   // Enable the Vuex store, required by the Druxt store.
   this.options.store = true
+
+  // Add the themeable preview component. The page imports it by this name.
+  this.addTemplate({
+    src: resolve(__dirname, '../templates/DruxtNodePreview.vue'),
+    fileName: 'components/druxt-node-preview.vue',
+  })
 
   // Add the page component template.
   const { dst } = this.addTemplate({
