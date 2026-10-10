@@ -100,11 +100,20 @@ describe('$druxtNodePreview plugin', () => {
     expect(get.mock.calls[0][0]).toBe(`/jsonapi/node/article/${UUID}/preview?include=field_body`)
   })
 
-  test('fetch keeps an include the endpoint already has', async () => {
+  test('fetch merges the configured include into the endpoint\'s include', async () => {
     const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }))
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    const path = `/jsonapi/node/article/${UUID}/preview`
+
     await injected.value.fetch(`${ENDPOINT}?include=field_content`)
-    expect(get.mock.calls[0][0]).toBe(`${ENDPOINT}?include=field_content`)
+    await injected.value.fetch(`${ENDPOINT}?include=field_body,field_content`)
+    await injected.value.fetch(`${path}?resourceVersion=rel%3Alatest-version&include=field_content`)
+
+    expect(get.mock.calls.map((call) => call[0])).toEqual([
+      `${ENDPOINT}?include=field_content,field_body`,
+      `${ENDPOINT}?include=field_body,field_content`,
+      `${path}?resourceVersion=rel%3Alatest-version&include=field_content,field_body`,
+    ])
   })
 
   test('fetch through the client refuses a response that is not JSON:API', async () => {
