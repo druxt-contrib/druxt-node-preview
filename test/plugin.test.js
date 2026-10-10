@@ -67,6 +67,8 @@ describe('$druxtNodePreview plugin', () => {
     expect(state).toEqual({ active: false, uuid: null })
     modules.druxtNodePreview.mutations.start(state, 'abc')
     expect(state).toEqual({ active: true, uuid: 'abc' })
+    modules.druxtNodePreview.mutations.stop(state)
+    expect(state).toEqual({ active: false, uuid: null })
   })
 
   test('fetch goes through the Druxt client with credentials', async () => {
@@ -243,4 +245,56 @@ describe('$druxtNodePreview plugin', () => {
     expect(commits).toHaveLength(0)
   })
 
+  // DruxtEntity reads a resource under its language: its langcode prop, else
+  // the route's langcode meta. The preview's DruxtEntity has no langcode prop.
+  test('seed stores under the route\'s language, where DruxtEntity reads', () => {
+    const router = { beforeEach: () => {}, currentRoute: { name: 'druxt-node-preview', meta: { langcode: 'es' } } }
+    const { injected, commits } = buildPlugin({ router })
+    injected.value.seed({ data: { type: 'node--article', id: UUID } })
+    expect(commits[0].payload.prefix).toBe('es')
+  })
+
+  describe('leaving the preview route', () => {
+    let guard
+    let preview
+
+    beforeEach(() => {
+      const router = { beforeEach: (fn) => { guard = fn } }
+      preview = buildPlugin({ router })
+      preview.injected.value.seed({
+        data: { type: 'node--article', id: UUID },
+        included: [{ type: 'paragraph--text', id: P1 }],
+      })
+      preview.commits.length = 0
+    })
+
+    // The preview seeded unsaved resources into the Druxt store. The next
+    // page must fetch the saved ones, and must not see the preview flag.
+    test('flushes what the preview seeded and clears the flag', () => {
+      const next = jest.fn()
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, next)
+
+      expect(preview.commits).toEqual([
+        { name: 'druxt/flushResource', payload: { type: 'node--article', id: UUID } },
+        { name: 'druxt/flushResource', payload: { type: 'paragraph--text', id: P1 } },
+        { name: 'druxtNodePreview/stop', payload: undefined },
+      ])
+      expect(next).toHaveBeenCalledWith()
+    })
+
+    test('flushes only once', () => {
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, jest.fn())
+      preview.commits.length = 0
+      guard({ name: 'index' }, { name: 'druxt-node-preview' }, jest.fn())
+      expect(preview.commits).toEqual([])
+    })
+
+    test('leaves other navigation alone', () => {
+      const next = jest.fn()
+      guard({ name: 'docs' }, { name: 'index' }, next)
+      guard({ name: 'druxt-node-preview' }, { name: 'druxt-node-preview' }, next)
+      expect(preview.commits).toEqual([])
+      expect(next.mock.calls).toEqual([[], []])
+    })
+  })
 })

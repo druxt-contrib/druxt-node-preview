@@ -123,6 +123,10 @@ preview is active:
 if ((this.$store.state.druxtNodePreview || {}).active) return
 ```
 
+When the editor leaves the preview, the plugin removes the resources it
+seeded from the Druxt store and clears the flag, before the next page loads.
+That page then fetches the saved content.
+
 ## The request
 
 The page fetches through the Druxt client, `$druxt.axios`, with credentials.
