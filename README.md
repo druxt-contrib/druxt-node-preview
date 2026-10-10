@@ -114,6 +114,13 @@ preview is active:
 if ((this.$store.state.druxtNodePreview || {}).active) return
 ```
 
+The flag does not leak into other pages. Leaving the preview route flushes
+every resource the preview seeded from the Druxt store and clears the flag,
+before the next page loads. That page then fetches and renders the saved
+content.
+
+This needs Druxt 0.25 or later, for the `druxt/flushResource` mutation.
+
 ## The request
 
 The page fetches through the Druxt client, `$druxt.axios`, with credentials.

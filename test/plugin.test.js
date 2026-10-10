@@ -58,6 +58,8 @@ describe('$druxtNodePreview plugin', () => {
     expect(state).toEqual({ active: false, uuid: null })
     modules.druxtNodePreview.mutations.start(state, 'abc')
     expect(state).toEqual({ active: true, uuid: 'abc' })
+    modules.druxtNodePreview.mutations.stop(state)
+    expect(state).toEqual({ active: false, uuid: null })
   })
 
   test('fetch goes through the Druxt client with credentials', async () => {
@@ -152,4 +154,48 @@ describe('$druxtNodePreview plugin', () => {
     expect(commits[2].payload.resource.data.id).toBe('p2')
   })
 
+
+  describe('leaving the preview route', () => {
+    let guard
+    let preview
+
+    beforeEach(() => {
+      const router = { beforeEach: (fn) => { guard = fn } }
+      preview = buildPlugin({ router })
+      preview.injected.value.seed({
+        data: { type: 'node--article', id: 'abc' },
+        included: [{ type: 'paragraph--text', id: 'p1' }],
+      })
+      preview.commits.length = 0
+    })
+
+    // The preview seeded unsaved resources into the Druxt store. The next
+    // page must fetch the saved ones, and must not see the preview flag.
+    test('flushes what the preview seeded and clears the flag', () => {
+      const next = jest.fn()
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, next)
+
+      expect(preview.commits).toEqual([
+        { name: 'druxt/flushResource', payload: { type: 'node--article', id: 'abc' } },
+        { name: 'druxt/flushResource', payload: { type: 'paragraph--text', id: 'p1' } },
+        { name: 'druxtNodePreview/stop', payload: undefined },
+      ])
+      expect(next).toHaveBeenCalledWith()
+    })
+
+    test('flushes only once', () => {
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, jest.fn())
+      preview.commits.length = 0
+      guard({ name: 'index' }, { name: 'druxt-node-preview' }, jest.fn())
+      expect(preview.commits).toEqual([])
+    })
+
+    test('leaves other navigation alone', () => {
+      const next = jest.fn()
+      guard({ name: 'docs' }, { name: 'index' }, next)
+      guard({ name: 'druxt-node-preview' }, { name: 'druxt-node-preview' }, next)
+      expect(preview.commits).toEqual([])
+      expect(next.mock.calls).toEqual([[], []])
+    })
+  })
 })
