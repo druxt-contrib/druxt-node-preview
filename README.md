@@ -119,8 +119,9 @@ The page fetches through the Druxt client, `$druxt.axios`, with credentials.
 So the site's own request interceptors apply, such as a workspace header, and
 the editor's session cookie goes with the request.
 
-An endpoint given as a path is resolved against the frontend's own origin.
-That suits a frontend that proxies Drupal on its own origin: no CORS, and the
+An endpoint given as a path stays a path. The Druxt client resolves it against
+its own base URL, and interceptors that decide by path still match it. That
+suits a frontend that proxies Drupal on its own origin: no CORS, and the
 session cookie stays first party. With an absolute endpoint on another origin,
 Drupal needs CORS with `supportsCredentials: true` for the frontend origin,
 and a `SameSite=None` session cookie.

@@ -65,13 +65,23 @@ describe('$druxtNodePreview plugin', () => {
     const get = jest.fn().mockResolvedValue({ data: doc })
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
 
-    const result = await injected.value.fetch('/jsonapi/node/article/abc/preview')
+    const result = await injected.value.fetch('https://example.com/jsonapi/node/article/abc/preview')
 
     expect(get).toHaveBeenCalledWith(
-      window.location.origin + '/jsonapi/node/article/abc/preview?include=field_body',
+      'https://example.com/jsonapi/node/article/abc/preview?include=field_body',
       expect.objectContaining({ withCredentials: true }),
     )
     expect(result).toBe(doc)
+  })
+
+  // A site's request interceptors often decide by path, for example to add
+  // a workspace header to its own API requests. An absolute URL on the
+  // frontend's origin would slip past them.
+  test('fetch hands a path endpoint to the Druxt client as a path', async () => {
+    const get = jest.fn().mockResolvedValue({ data: {} })
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch('/jsonapi/node/article/abc/preview')
+    expect(get.mock.calls[0][0]).toBe('/jsonapi/node/article/abc/preview?include=field_body')
   })
 
   test('fetch keeps an include the endpoint already has', async () => {
@@ -102,6 +112,13 @@ describe('$druxtNodePreview plugin', () => {
     expect(result).toBe(doc)
   })
 
+  test('fetch without the Druxt client keeps a path endpoint relative', async () => {
+    const { injected } = buildPlugin()
+    window.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    await injected.value.fetch('/jsonapi/node/article/abc/preview')
+    expect(window.fetch.mock.calls[0][0]).toBe('/jsonapi/node/article/abc/preview?include=field_body')
+  })
+
   test('fetch throws on a failed response', async () => {
     const { injected } = buildPlugin()
     window.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
@@ -126,4 +143,5 @@ describe('$druxtNodePreview plugin', () => {
     expect(commits[0]).toEqual({ name: 'druxt/addResource', payload: { resource: { data: doc.data } } })
     expect(commits[2].payload.resource.data.id).toBe('p2')
   })
+
 })
