@@ -26,9 +26,15 @@ data renders through the same components as the live site.
 
 ## Install
 
+It needs Druxt 0.25 and Druxt Entity 0.29, through `druxt-site` 0.15. Until
+they are released, install `druxt-site` from the `dev` tag first:
+
 ```sh
+npm install druxt-site@dev
 npm install @druxt-contrib/node-preview
 ```
+
+A site without `druxt-site` lists `druxt-entity` in `modules` instead.
 
 ```js
 // nuxt.config.js
