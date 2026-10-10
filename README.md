@@ -42,8 +42,9 @@ export default {
     nodePreview: {
       // The preview page's path. This is the default.
       path: '/druxt/node/preview',
-      // Relationships to include, when the endpoint has no include of its
-      // own. Consumer Node Preview already includes a node's paragraphs.
+      // Relationships to add to the endpoint's own include. Consumer Node
+      // Preview already includes a node's paragraphs, so add what they
+      // reference, for example 'field_content.field_media'.
       include: [],
     },
   },

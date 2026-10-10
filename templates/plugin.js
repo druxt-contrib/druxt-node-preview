@@ -25,17 +25,25 @@ export default ({ app, store }, inject) => {
   }
 
   /**
-   * Adds the configured includes, unless the URL already has an include.
+   * Adds the configured includes to the include the URL already has.
    *
-   * Consumer Node Preview already includes a node's paragraphs.
+   * Consumer Node Preview already includes a node's paragraphs. A site adds
+   * what those paragraphs reference, such as their media.
    *
    * @param {string} url - The endpoint.
    *
    * @returns {string} The URL to request.
    */
   const withInclude = (url) => {
-    if (!include.length || /[?&]include=/.test(url)) return url
-    return url + (url.includes('?') ? '&' : '?') + 'include=' + include.join(',')
+    if (!include.length) return url
+    const [base, query = ''] = url.split('?')
+    const params = query.split('&').filter((param) => param && !param.startsWith('include='))
+    const current = (query.split('&').find((param) => param.startsWith('include=')) || 'include=')
+      .slice('include='.length)
+      .split(',')
+      .filter(Boolean)
+    const merged = [...new Set([...current, ...include])]
+    return base + '?' + [...params, 'include=' + merged.join(',')].join('&')
   }
 
   /**

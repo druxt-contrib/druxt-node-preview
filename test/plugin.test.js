@@ -84,11 +84,19 @@ describe('$druxtNodePreview plugin', () => {
     expect(get.mock.calls[0][0]).toBe('/jsonapi/node/article/abc/preview?include=field_body')
   })
 
-  test('fetch keeps an include the endpoint already has', async () => {
+  test('fetch merges the configured include into the endpoint\'s include', async () => {
     const get = jest.fn().mockResolvedValue({ data: {} })
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+
     await injected.value.fetch('https://example.com/preview?include=field_content')
-    expect(get.mock.calls[0][0]).toBe('https://example.com/preview?include=field_content')
+    await injected.value.fetch('https://example.com/preview?include=field_body,field_content')
+    await injected.value.fetch('/preview?resourceVersion=rel%3Alatest-version&include=field_content')
+
+    expect(get.mock.calls.map((call) => call[0])).toEqual([
+      'https://example.com/preview?include=field_content,field_body',
+      'https://example.com/preview?include=field_body,field_content',
+      '/preview?resourceVersion=rel%3Alatest-version&include=field_content,field_body',
+    ])
   })
 
   test('fetch through the client reports the status and body', async () => {
