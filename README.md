@@ -129,10 +129,11 @@ The site's request interceptors apply, such as one that adds a workspace
 header, and the editor's session cookie goes with the request. Without the
 Druxt client, the page uses `window.fetch`.
 
-An endpoint given as a path is resolved against the frontend's own origin.
-That suits a frontend that serves Drupal through a proxy on its own origin.
-The editor must then sign in through that proxy too, because the session
-cookie belongs to the host the editor signed in on.
+An endpoint given as a path stays a path. The Druxt client resolves it against
+its own base URL, and interceptors that decide by path still match it. That
+suits a frontend that serves Drupal through a proxy on its own origin. The
+editor must then sign in through that proxy too, because the session cookie
+belongs to the host the editor signed in on.
 
 With an absolute endpoint on another origin, Drupal needs CORS with
 `supportsCredentials: true` for the frontend origin. Drupal's session cookie

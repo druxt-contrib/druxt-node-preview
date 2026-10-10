@@ -140,9 +140,8 @@ export default ({ app, store }, inject) => {
      *
      * The request goes through the Druxt client, with credentials. The site's
      * request interceptors apply, and the editor's session cookie goes with
-     * it.
-     * A path is resolved against the frontend's own origin, which suits a
-     * site that proxies Drupal.
+     * it. A path stays a path. The client resolves it against its own base
+     * URL, and interceptors that decide by path still see it.
      *
      * @param {string} endpoint - The JSON:API Node Preview endpoint.
      *
@@ -150,7 +149,7 @@ export default ({ app, store }, inject) => {
      */
     fetch: async (endpoint) => {
       const uuid = checkEndpoint(endpoint)
-      const url = new URL(withInclude(endpoint), window.location.origin).href
+      const url = withInclude(endpoint)
       const headers = { Accept: 'application/vnd.api+json' }
       const client = (app.$druxt || {}).axios
       if (client) {

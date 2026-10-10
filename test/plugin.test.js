@@ -74,10 +74,10 @@ describe('$druxtNodePreview plugin', () => {
     const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
 
-    const result = await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    const result = await injected.value.fetch(ENDPOINT)
 
     expect(get).toHaveBeenCalledWith(
-      window.location.origin + `/jsonapi/node/article/${UUID}/preview?include=field_body`,
+      `${ENDPOINT}?include=field_body`,
       expect.objectContaining({ withCredentials: true }),
     )
     expect(result).toBe(doc)
@@ -88,6 +88,16 @@ describe('$druxtNodePreview plugin', () => {
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
     await expect(injected.value.fetch('https://evil.example/doc.json')).rejects.toThrow('not on this site')
     expect(get).not.toHaveBeenCalled()
+  })
+
+  // A site's request interceptors often decide by path, for example to add
+  // a workspace header to its own API requests. An absolute URL on the
+  // frontend's origin would slip past them.
+  test('fetch hands a path endpoint to the Druxt client as a path', async () => {
+    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    expect(get.mock.calls[0][0]).toBe(`/jsonapi/node/article/${UUID}/preview?include=field_body`)
   })
 
   test('fetch keeps an include the endpoint already has', async () => {
@@ -148,6 +158,13 @@ describe('$druxtNodePreview plugin', () => {
     window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
     await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
     expect(window.fetch).toHaveBeenCalled()
+  })
+
+  test('fetch without the Druxt client keeps a path endpoint relative', async () => {
+    const { injected } = buildPlugin()
+    window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
+    await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    expect(window.fetch.mock.calls[0][0]).toBe(`/jsonapi/node/article/${UUID}/preview?include=field_body`)
   })
 
   test('fetch throws on a failed response', async () => {
@@ -216,4 +233,5 @@ describe('$druxtNodePreview plugin', () => {
     }
     expect(commits).toHaveLength(0)
   })
+
 })
