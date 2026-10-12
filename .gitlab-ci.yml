@@ -71,3 +71,28 @@ test:build:
     paths:
       - dist/
     expire_in: 1 week
+
+# The e2e stack needs PHP, composer and a Playwright browser, which the
+# shared node image does not carry. It runs on every pipeline and is not
+# allowed to fail, so a red run fails the pipeline.
+test:e2e:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.62.1-noble
+  allow_failure: false
+  # One e2e run at a time. Stacks that build at once on the shared runner
+  # slow each other down until tests flake.
+  resource_group: e2e
+  script:
+    # deasync builds a native module during npm ci, so the image needs make
+    # and a compiler.
+    - apt-get update && apt-get install -y -q build-essential php-cli php-sqlite3 php-gd php-xml php-mbstring php-curl composer
+    - npm ci
+    - test/e2e/run.sh
+  artifacts:
+    when: always
+    reports:
+      junit: test/e2e/reports/junit.xml
+    paths:
+      - test/e2e/reports/
+      - test-results/
+    expire_in: 1 week
