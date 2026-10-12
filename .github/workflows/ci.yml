@@ -1,0 +1,101 @@
+# Druxt contrib standard CI. Reference implementation.
+#
+# GitHub Actions is the canonical CI for Druxt npm modules; a private GitLab runs
+# an additive private pipeline (.gitlab-ci.yml). Publish to npm only from a
+# commit green on both. This file follows druxt core's modernized ci.yml and
+# is intended to collapse into a reusable workflow_call in
+# druxt-contrib/.github once that repo exists.
+name: ci
+
+on:
+  push:
+    # A release line is <major>.x or <major>.<minor>.x, so '*.x' matches
+    # both shapes: * matches dots. Releases are tags, so there is no
+    # release branch to list here.
+    branches: ['*.x']
+  pull_request:
+    # No branch filter on purpose. The filter matches the pull request's
+    # base, so a stacked pull request based on a feature branch would run
+    # no jobs at all, and show no checks rather than failing ones.
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 16.20.1
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # The package must hold what Nuxt loads, and the CommonJS build must
+      # load on Node 16, which the Druxt toolchain runs on.
+      - run: node -e "const m = require('./dist/index.ssr.js'); if (typeof (m.default || m) !== 'function') { console.error('dist/index.ssr.js does not export the module'); process.exit(1) }"
+      # Pack as npm publish does, and check the tarball holds what Nuxt loads.
+      - run: |
+          npm pack
+          for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue; do
+            tar -tzf druxt-contrib-node-preview-*.tgz | grep -qx "package/$f" || { echo "The package is missing $f"; exit 1; }
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  lint:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Full audit reports only. The production audit blocks.
+      - run: npm audit || true
+      - run: npm audit --omit=dev
+
+  unit:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx jest --runInBand --reporters=default --reporters=jest-junit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-unit
+          path: junit.xml
+          if-no-files-found: ignore
+

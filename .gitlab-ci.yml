@@ -1,0 +1,73 @@
+################
+# Druxt contrib private GitLab pipeline.
+#
+# GitHub Actions is the canonical CI for Druxt npm modules. This pipeline is
+# the additive private gate: while the module lives only on that GitLab it is the
+# only gate, and once mirrored to GitHub nothing publishes to npm unless the
+# same commit is green here and there. Style follows druxt/druxt.js.
+################
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+image: node:16.20.1
+
+stages:
+  - lint
+  - test
+
+.npm-cache: &npm-cache
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+
+lint:js:
+  stage: lint
+  <<: *npm-cache
+  script:
+    - npm run lint
+
+lint:audit:
+  stage: lint
+  script:
+    # Full audit reports only. The production audit blocks.
+    - npm audit || true
+    - npm audit --omit=dev
+
+test:unit:
+  stage: test
+  <<: *npm-cache
+  script:
+    - npx jest --runInBand --reporters=default --reporters=jest-junit
+  artifacts:
+    when: always
+    reports:
+      junit: junit.xml
+
+test:build:
+  stage: test
+  <<: *npm-cache
+  script:
+    - npm run build
+    # The package must hold what Nuxt loads, and the CommonJS build must
+    # load on Node 16, which the Druxt toolchain runs on.
+    - node -e "const m = require('./dist/index.ssr.js'); if (typeof (m.default || m) !== 'function') { console.error('dist/index.ssr.js does not export the module'); process.exit(1) }"
+    # Pack as npm publish does, and check the tarball holds what Nuxt loads.
+    - |
+      npm pack
+      for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue; do
+        tar -tzf druxt-contrib-node-preview-*.tgz | grep -qx "package/$f" || { echo "The package is missing $f"; exit 1; }
+      done
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
