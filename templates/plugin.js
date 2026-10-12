@@ -13,6 +13,7 @@
  */
 export default ({ app, store }, inject) => {
   const include = JSON.parse('<%= JSON.stringify(options.include) %>')
+  const layouts = JSON.parse('<%= JSON.stringify(options.layouts) %>')
   // Origins the preview may come from, besides this site's own.
   const origins = JSON.parse('<%= JSON.stringify(options.origins) %>')
 
@@ -197,6 +198,18 @@ export default ({ app, store }, inject) => {
   )
 
   const plugin = {
+    /**
+     * Returns the Nuxt layout for a requested layout name.
+     *
+     * Only a name in the `layouts` option is used, so a preview URL cannot
+     * put the page in any other layout of the site.
+     *
+     * @param {*} name - The requested name, usually from `?layout=`.
+     *
+     * @returns {string|undefined} The layout, or undefined for the default.
+     */
+    layout: (name) => (typeof name === 'string' && layouts.includes(name) ? name : undefined),
+
     /**
      * Returns the preview endpoint from the URL fragment.
      *

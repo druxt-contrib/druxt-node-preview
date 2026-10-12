@@ -59,6 +59,10 @@ export default {
       // The endpoint arrives in the URL fragment, which any link can set, so
       // the page refuses every other origin.
       origins: [],
+      // Nuxt layouts the preview may render in, picked with ?layout=.
+      // List the same names for the target in Drupal: on the consumer, or
+      // on a settings.php target.
+      layouts: [],
     },
   },
 }
@@ -70,10 +74,19 @@ hook the route.
 In Drupal, add a Consumer Node Preview target that points at the page:
 
 ```text
-https://frontend.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]
+https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]
 ```
 
-`vm` holds the view mode, and the endpoint goes in the fragment.
+`vm` holds the view mode, and `layout` the layout picked in the preview's
+Layout select. The endpoint goes in the fragment.
+
+The page uses the layout that `?layout=` names, if `layouts` lists it.
+Otherwise it uses the default layout, so a preview URL cannot put the page in
+another of the site's layouts. Each listed layout must be a file in the site's
+`layouts/` that renders `<Nuxt />`. A bare layout, with the site's type and
+spacing but no header or footer, suits a preview of content that sits inside
+other pages. `$druxtNodePreview.layout(name)` makes the same check, for a site
+that picks layouts elsewhere.
 
 ## Theming the preview
 
@@ -164,7 +177,9 @@ with composer-patches.
 ## Server rendering
 
 The page only works in the browser. The fragment never reaches the server, so
-a server render shows "Loading preview..." and the browser fills it in.
+a server render shows "Loading preview..." and the browser fills it in. On a
+statically generated site, the page sets the listed layout once it is in the
+browser, because the generated page has the default one.
 
 ## Vendoring
 

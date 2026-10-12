@@ -60,6 +60,28 @@ const toInclude = (value) => {
 }
 
 /**
+ * Returns the layouts option as plain layout names.
+ *
+ * A name that is not a plain file name is dropped with a warning, so the
+ * plugin template only gets plain values.
+ *
+ * @param {*} value - The option value.
+ *
+ * @returns {string[]} The layout names.
+ */
+const toLayouts = (value) => {
+  if (!Array.isArray(value)) {
+    warn('Ignored the layouts option. Use a list of layout names, such as [\'preview\'].')
+    return []
+  }
+  return value.filter((name) => {
+    if (typeof name === 'string' && /^[A-Za-z0-9_-]+$/.test(name)) return true
+    warn(`Ignored the layout ${JSON.stringify(name)}. Use the name of a file in layouts/, such as "preview". A layout in a subfolder cannot be listed.`)
+    return false
+  })
+}
+
+/**
  * The DruxtNodePreview Nuxt module.
  *
  * Registers a client side page that renders a Drupal node preview. The page
@@ -69,7 +91,10 @@ const toInclude = (value) => {
  *
  * The Drupal site points a Consumer Node Preview target at the page:
  *
- *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]
+ *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]
+ *
+ * The page renders in the Nuxt layout named by `?layout=`, when that name is
+ * in the `layouts` option. Any other name, or none, gives the default layout.
  *
  * The route name, `druxt-node-preview`, is public. Sites hook it, so do not
  * change it.
@@ -82,6 +107,7 @@ const NuxtModule = function (moduleOptions = {}) {
     path: '/druxt/node/preview',
     include: [],
     origins: [],
+    layouts: [],
     ...druxt.nodePreview || {},
     ...moduleOptions,
   }
@@ -125,6 +151,7 @@ const NuxtModule = function (moduleOptions = {}) {
   const pluginOptions = {
     include: toInclude(options.include),
     origins: [],
+    layouts: toLayouts(options.layouts),
   }
 
   // The page fetches a preview only from its own origin, Druxt's Drupal site,

@@ -9,6 +9,7 @@ const loadPlugin = (include = ['field_body']) => {
     .readFileSync(path.resolve(__dirname, '../templates/plugin.js'), 'utf8')
     .replace("'<%= JSON.stringify(options.include) %>'", "'" + JSON.stringify(include) + "'")
     .replace("'<%= JSON.stringify(options.origins) %>'", '\'["https://example.com"]\'')
+    .replace("'<%= JSON.stringify(options.layouts) %>'", '\'["default","preview"]\'')
     .replace('export default', 'module.exports.default =')
   const mod = { exports: {} }
   new Function('module', 'exports', 'require', source)(mod, mod.exports, require)
@@ -51,6 +52,18 @@ describe('$druxtNodePreview plugin', () => {
     const { injected } = buildPlugin()
     expect(injected.name).toBe('druxtNodePreview')
     expect(typeof injected.value.fetch).toBe('function')
+  })
+
+  test('layout accepts only a configured layout name', () => {
+    const { injected } = buildPlugin()
+    expect(injected.value.layout('preview')).toBe('preview')
+    expect(injected.value.layout('default')).toBe('default')
+    expect(injected.value.layout('admin')).toBeUndefined()
+    expect(injected.value.layout(undefined)).toBeUndefined()
+    expect(injected.value.layout(['preview'])).toBeUndefined()
+    // What Consumer Node Preview sends for a target without layouts.
+    expect(injected.value.layout('')).toBeUndefined()
+    expect(injected.value.layout(null)).toBeUndefined()
   })
 
   test('endpoint comes from the fragment', () => {
