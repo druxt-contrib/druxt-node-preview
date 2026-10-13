@@ -48,8 +48,11 @@ export default {
   }),
 
   computed: {
+    // The view mode comes from the query, which any link can set, so only a
+    // machine name is used.
     viewMode() {
-      return this.$route.query.vm || 'full'
+      const { vm } = this.$route.query
+      return typeof vm === 'string' && /^[A-Za-z0-9_]+$/.test(vm) ? vm : 'full'
     },
   },
 
@@ -61,7 +64,11 @@ export default {
         return
       }
       const document = await this.$druxtNodePreview.fetch(endpoint)
-      this.entity = this.$druxtNodePreview.seed(document)
+      // seed() returns null once the editor is leaving. This page can still
+      // be mounted then, and a document without an entity would not render.
+      const entity = this.$druxtNodePreview.seed(document)
+      if (!entity) return
+      this.entity = entity
       this.document = document
     }
     catch (error) {

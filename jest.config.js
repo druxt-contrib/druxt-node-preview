@@ -3,6 +3,10 @@ module.exports = {
   coverageDirectory: './coverage/',
   coveragePathIgnorePatterns: ['/dist/'],
   moduleFileExtensions: ['js', 'json', 'vue'],
+  // The page imports the preview component by the name Nuxt gives it.
+  moduleNameMapper: {
+    '^\\./druxt-node-preview\\.vue$': '<rootDir>/templates/DruxtNodePreview.vue',
+  },
   modulePathIgnorePatterns: ['/example/', '/test/e2e/'],
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: ['/example/', '/test/e2e/'],

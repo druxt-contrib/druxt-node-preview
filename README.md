@@ -50,7 +50,9 @@ export default {
       path: '/druxt/node/preview',
       // Relationships to add to the endpoint's own include. Consumer Node
       // Preview already includes a node's paragraphs, so add what they
-      // reference, for example 'field_content.field_media'.
+      // reference, for example 'field_content.field_media'. JSON:API rejects
+      // a path the previewed type does not have, so key paths that only some
+      // bundles have by type: { 'node--page': ['field_content.field_media'] }.
       include: [],
       // Origins the preview may come from, besides this site and the
       // baseUrl above, each a full URL such as 'https://cms.example.com'.
@@ -144,12 +146,15 @@ An endpoint given as a path stays a path. The Druxt client resolves it against
 its own base URL, and interceptors that decide by path still match it. That
 suits a frontend that serves Drupal through a proxy on its own origin. The
 editor must then sign in through that proxy too, because the session cookie
-belongs to the host the editor signed in on.
+belongs to the host the editor signed in on. Druxt's `proxy: { api: true }`
+forwards the API but not Drupal's sign-in pages, so it is not enough on its
+own.
 
-With an absolute endpoint on another origin, Drupal needs CORS with
-`supportsCredentials: true` for the frontend origin. Drupal's session cookie
-is `SameSite=Lax`, so the frontend and Drupal must share a site, such as
-`www.example.com` and `cms.example.com`.
+Without a proxy, the Druxt client sends a path to Drupal's origin, as it does
+an absolute endpoint. Then Drupal needs CORS with `supportsCredentials: true`
+for the frontend origin. Drupal's session cookie is `SameSite=Lax`, so the
+frontend and Drupal must share a site, such as `www.example.com` and
+`cms.example.com`.
 
 JSON:API Node Preview 1.0.0-beta5 and earlier serve stale or missing
 paragraphs. Until a release includes them, apply the fixes from

@@ -81,6 +81,18 @@ export default ({ app, store }, inject) => {
     }
   }
 
+  /**
+   * Returns whether a route is the preview route.
+   *
+   * nuxt-i18n adds a language suffix to route names, such as
+   * `druxt-node-preview___en`.
+   *
+   * @param {object} route - A route.
+   *
+   * @returns {boolean} True for the preview route.
+   */
+  const isPreview = (route) => /^druxt-node-preview(___[A-Za-z0-9_-]+)?$/.test((route || {}).name || '')
+
   // The type and id of every resource the preview put in the Druxt store.
   const seeded = []
 
@@ -101,15 +113,29 @@ export default ({ app, store }, inject) => {
     }, { preserveState: !!(store.state || {}).druxtNodePreview })
   }
 
+  // True from when the editor leaves the preview route until a preview route
+  // opens again. vue-router changes currentRoute only after the next route's
+  // code loads, so a fetch that ends meanwhile still sees the preview route.
+  // When that code fails to download, Nuxt reloads the page, which resets
+  // this. A site guard that cancels the leave with next(false) leaves it set
+  // until the next navigation, because vue-router has no hook for that.
+  let left = false
+
   // Before the next route loads, so none of its components read a seeded
   // resource. Druxt then fetches the saved one.
   if (app.router) {
     app.router.beforeEach((to, from, next) => {
-      if (from.name === 'druxt-node-preview' && to.name !== 'druxt-node-preview' && seeded.length) {
-        for (const { type, id } of seeded.splice(0)) {
-          store.commit('druxt/flushResource', { type, id })
+      if (isPreview(from) && !isPreview(to)) {
+        left = true
+        if (seeded.length) {
+          for (const { type, id } of seeded.splice(0)) {
+            store.commit('druxt/flushResource', { type, id })
+          }
+          store.commit('druxtNodePreview/stop')
         }
-        store.commit('druxtNodePreview/stop')
+      }
+      else if (isPreview(to)) {
+        left = false
       }
       next()
     })
@@ -126,15 +152,35 @@ export default ({ app, store }, inject) => {
    * @returns {string} The URL to request.
    */
   const withInclude = (url) => {
-    if (!include.length) return url
+    const configured = includeFor(url)
+    if (!configured.length) return url
     const [base, query = ''] = url.split('?')
     const params = query.split('&').filter((param) => param && !param.startsWith('include='))
     const current = (query.split('&').find((param) => param.startsWith('include=')) || 'include=')
       .slice('include='.length)
       .split(',')
       .filter(Boolean)
-    const merged = [...new Set([...current, ...include])]
+    const merged = [...new Set([...current, ...configured])]
     return base + '?' + [...params, 'include=' + merged.join(',')].join('&')
+  }
+
+  /**
+   * Returns the configured include paths for an endpoint.
+   *
+   * The option is a list for every previewed type, or an object of lists
+   * keyed by JSON:API type, such as `node--page`. JSON:API rejects a path
+   * that the type does not have, so a path only some bundles have goes in
+   * the object form.
+   *
+   * @param {string} url - The endpoint, from Consumer Node Preview:
+   *   `.../{entity type}/{bundle}/{uuid}/preview`.
+   *
+   * @returns {string[]} The include paths.
+   */
+  function includeFor(url) {
+    if (Array.isArray(include)) return include
+    const match = url.split('?')[0].match(/\/([^/]+)\/([^/]+)\/[0-9a-f-]{36}\/preview$/)
+    return (match && include[match[1] + '--' + match[2]]) || []
   }
 
   /**
@@ -218,9 +264,14 @@ export default ({ app, store }, inject) => {
      *
      * @param {object} doc - The JSON:API document.
      *
-     * @returns {object} The type and id of the previewed resource.
+     * @returns {object|null} The type and id of the previewed resource, or null
+     *   when the editor has left the preview.
      */
     seed: (doc) => {
+      // A fetch can end after the editor has left the preview. Then nothing
+      // is seeded, so nothing unsaved reaches the next page.
+      if (left) return null
+      if (app.router && !isPreview(app.router.currentRoute)) return null
       checkDocument(doc)
       // DruxtEntity reads a resource under its language: its langcode prop,
       // else the route's langcode meta. The preview's DruxtEntity has no

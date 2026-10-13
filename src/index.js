@@ -1,19 +1,6 @@
 import { resolve } from 'path'
 
 /**
- * Returns the strings in an option list that match a pattern.
- *
- * Anything else is left out, so the plugin template only gets plain values.
- *
- * @param {*} list - The option value.
- * @param {RegExp} pattern - The pattern each value must match.
- *
- * @returns {string[]} The values.
- */
-const only = (list, pattern) => (Array.isArray(list) ? list : [])
-  .filter((item) => typeof item === 'string' && pattern.test(item))
-
-/**
  * Returns a URL's origin, or null when it is not an http(s) URL.
  *
  * @param {*} url - The URL.
@@ -31,6 +18,48 @@ const toOrigin = (url) => {
 }
 
 /**
+ * Reports an option value the module drops.
+ *
+ * @param {string} message - What was dropped, and what to use instead.
+ */
+const warn = (message) => console.warn('[druxt-node-preview] ' + message)
+
+/**
+ * Returns the include option as plain values.
+ *
+ * The option is a list of include paths, or lists keyed by JSON:API type.
+ * Any other value is dropped with a warning, so the plugin template only gets
+ * plain values.
+ *
+ * @param {*} value - The option value.
+ *
+ * @returns {string[]|object} The include option.
+ */
+const toInclude = (value) => {
+  const paths = (list, where) => {
+    if (!Array.isArray(list)) {
+      warn(`Ignored the include option${where}. Use a list of paths, such as ['field_content.field_media'].`)
+      return []
+    }
+    return list.filter((path) => {
+      if (typeof path === 'string' && /^[A-Za-z0-9_.-]+$/.test(path)) return true
+      warn(`Ignored the include path ${JSON.stringify(path)}${where}. Use field names joined by dots, such as "field_content.field_media".`)
+      return false
+    })
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([type]) => {
+        if (/^[A-Za-z0-9_]+--[A-Za-z0-9_]+$/.test(type)) return true
+        warn(`Ignored the include key "${type}". Key paths by JSON:API type, such as "node--page".`)
+        return false
+      })
+      .map(([type, list]) => [type, paths(list, ` for ${type}`)]))
+  }
+  return paths(value, '')
+}
+
+/**
  * The DruxtNodePreview Nuxt module.
  *
  * Registers a client side page that renders a Drupal node preview. The page
@@ -42,8 +71,8 @@ const toOrigin = (url) => {
  *
  *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]
  *
- * The route is named `druxt-node-preview`. The name is public: a site may
- * hook it, so it does not change.
+ * The route name, `druxt-node-preview`, is public. Sites hook it, so do not
+ * change it.
  *
  * @param {object} moduleOptions - Nuxt module options.
  */
@@ -85,16 +114,16 @@ const NuxtModule = function (moduleOptions = {}) {
   // An origin the site lists must be a full http(s) URL. Say so, rather than
   // leave the site to find out from a refused preview.
   if (!Array.isArray(options.origins)) {
-    console.warn('[druxt-node-preview] Ignored the origins option. Use a list of full http(s) URLs, such as [\'https://cms.example.com\'].')
+    warn('Ignored the origins option. Use a list of full http(s) URLs, such as [\'https://cms.example.com\'].')
   }
   const listed = (Array.isArray(options.origins) ? options.origins : []).filter((url) => {
     if (toOrigin(url)) return true
-    console.warn(`[druxt-node-preview] Ignored the origin "${url}". Use a full http(s) URL, such as "https://cms.example.com".`)
+    warn(`Ignored the origin "${url}". Use a full http(s) URL, such as "https://cms.example.com".`)
     return false
   })
 
   const pluginOptions = {
-    include: only(options.include, /^[A-Za-z0-9_.-]+$/),
+    include: toInclude(options.include),
     origins: [],
   }
 
