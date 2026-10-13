@@ -45,12 +45,12 @@ export default {
   },
 
   async mounted() {
-    const endpoint = this.$druxtNodePreview.endpoint()
-    if (!endpoint) {
-      this.error = 'No preview endpoint was provided in the URL fragment.'
-      return
-    }
     try {
+      const endpoint = this.$druxtNodePreview.endpoint()
+      if (!endpoint) {
+        this.error = 'No preview endpoint was provided in the URL fragment.'
+        return
+      }
       const doc = await this.$druxtNodePreview.fetch(endpoint)
       this.entity = this.$druxtNodePreview.seed(doc)
     }

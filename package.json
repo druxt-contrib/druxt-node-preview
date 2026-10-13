@@ -13,7 +13,10 @@
     "nuxt",
     "preview"
   ],
-  "repository": "github:Decipher/druxt-node-preview",
+  "homepage": "https://github.com/druxt-contrib/druxt-node-preview#readme",
+  "bugs": "https://github.com/druxt-contrib/druxt-node-preview/issues",
+  "repository": "github:druxt-contrib/druxt-node-preview",
+  "license": "MIT",
   "exports": {
     ".": {
       "require": "./dist/index.ssr.js",

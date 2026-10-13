@@ -2,9 +2,7 @@
 #
 # GitHub Actions is the canonical CI for Druxt npm modules; a private GitLab runs
 # an additive private pipeline (.gitlab-ci.yml). Publish to npm only from a
-# commit green on both. This file follows druxt core's modernized ci.yml and
-# is intended to collapse into a reusable workflow_call in
-# druxt-contrib/.github once that repo exists.
+# commit green on both. This file follows druxt core's modernized ci.yml.
 name: ci
 
 on:
