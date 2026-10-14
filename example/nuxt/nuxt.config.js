@@ -10,6 +10,9 @@ export default {
     baseUrl: process.env.DRUPAL_BASE_URL || 'http://localhost:8080',
     // Consumer Node Preview already includes a node's paragraphs, so the
     // example adds no include of its own.
-    nodePreview: {},
+    nodePreview: {
+      // Layouts a preview may render in, picked with ?layout=.
+      layouts: ['preview'],
+    },
   },
 }
