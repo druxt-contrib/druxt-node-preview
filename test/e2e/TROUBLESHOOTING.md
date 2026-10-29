@@ -16,7 +16,7 @@ run.sh applies each fix below. This file says why.
   writes empty plugin discovery results into the persistent cache, and every
   later request reads them. From the web root, core's own
   `php -S localhost:8888 .ht.router.php` works, relative router path and all.
-- **Bind `0.0.0.0`, and keep URLs on `localhost`.** `php -S localhost:...`
+- **Bind `127.0.0.1`, and keep URLs on `localhost`.** `php -S localhost:...`
   binds only `::1` here. Browsers try both addresses, and Node resolves
   `localhost` to `127.0.0.1`, so the browser works while build time fetches
   get `ECONNREFUSED`. Do not mix `localhost` and `127.0.0.1` in URLs either.
