@@ -49,7 +49,7 @@ Then:
 
    ```sh
    cd web
-   php -S 0.0.0.0:8080 .ht.router.php
+   php -S 127.0.0.1:8080 .ht.router.php
    ```
 
 ## Nuxt
