@@ -1,0 +1,25 @@
+langcode: en
+status: true
+dependencies:
+  config:
+  - field.storage.node.field_body
+  - node.type.e2e_article
+  - paragraphs.paragraphs_type.text
+  module:
+  - entity_reference_revisions
+id: node.e2e_article.field_body
+field_name: field_body
+entity_type: node
+bundle: e2e_article
+label: Body paragraphs
+description: ''
+required: false
+translatable: true
+default_value: {}
+default_value_callback: ''
+settings:
+  handler: default:paragraph
+  handler_settings:
+    target_bundles:
+      text: text
+field_type: entity_reference_revisions

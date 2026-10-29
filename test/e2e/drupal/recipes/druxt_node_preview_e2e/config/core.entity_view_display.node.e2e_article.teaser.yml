@@ -1,0 +1,30 @@
+langcode: en
+status: true
+dependencies:
+  config:
+  - core.entity_view_mode.node.teaser
+  - field.field.node.e2e_article.field_body
+  - node.type.e2e_article
+  module:
+  - entity_reference_revisions
+  - user
+id: node.e2e_article.teaser
+targetEntityType: node
+bundle: e2e_article
+mode: teaser
+content:
+  field_body:
+    type: entity_reference_revisions_entity_view
+    label: hidden
+    settings:
+      view_mode: default
+      link: ''
+    third_party_settings: {}
+    weight: 10
+    region: content
+  links:
+    settings: {}
+    third_party_settings: {}
+    weight: 100
+    region: content
+hidden: {}

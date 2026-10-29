@@ -2,8 +2,8 @@
 # Orchestrates the end to end suite against a locally built stack.
 #
 # Stands up, in order:
-#   1. Drupal from example/drupal (sqlite), with the modules installed and
-#      test/e2e/drupal/setup.php applied.
+#   1. Drupal from example/drupal (sqlite), with the suite's recipe and the
+#      example's recipe applied, and the frontends as site targets.
 #   2. The static reference frontend on FRONTEND_STATIC_PORT.
 #   3. The Druxt frontend from example/nuxt on FRONTEND_DRUXT_PORT, when
 #      E2E_DRUXT=1. Without it the Druxt specs skip and the Drupal side
@@ -18,6 +18,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DRUPAL_PORT="${DRUPAL_PORT:-8131}"
 FRONTEND_STATIC_PORT="${FRONTEND_STATIC_PORT:-3112}"
 FRONTEND_DRUXT_PORT="${FRONTEND_DRUXT_PORT:-3111}"
+# settings.e2e.php reads the frontend ports from the environment.
+export FRONTEND_STATIC_PORT FRONTEND_DRUXT_PORT
 E2E_DRUXT="${E2E_DRUXT:-0}"
 PIDS=()
 
@@ -71,11 +73,12 @@ rm -f web/sites/default/settings.php "$DB_FILE" "$DB_FILE-wal" "$DB_FILE-shm"
 vendor/bin/drush site:install standard -y --db-url="$DB" --account-name=admin -q
 # site:install makes sites/default read-only, and services.yml goes there.
 chmod u+w web/sites/default
-vendor/bin/drush pm:install consumer_node_preview paragraphs -y -q
 cp "$ROOT/test/e2e/drupal/services.e2e.yml" web/sites/default/services.yml
 sed -i "s/localhost:3111/localhost:$FRONTEND_DRUXT_PORT/; s/localhost:3112/localhost:$FRONTEND_STATIC_PORT/" web/sites/default/services.yml
-vendor/bin/drush php:script "$ROOT/test/e2e/drupal/setup.php" -- \
-  "http://localhost:$FRONTEND_DRUXT_PORT" "http://localhost:$FRONTEND_STATIC_PORT"
+cp "$ROOT/test/e2e/drupal/settings.e2e.php" web/sites/default/settings.e2e.php
+chmod u+w web/sites/default/settings.php
+echo "include \$app_root . '/' . \$site_path . '/settings.e2e.php';" >> web/sites/default/settings.php
+vendor/bin/drush recipe "$ROOT/test/e2e/drupal/recipes/druxt_node_preview_e2e" -q
 # The example's own recipe, so the run fails if it breaks. It runs second,
 # because the specs edit node 1, the e2e article.
 vendor/bin/drush recipe ../recipes/druxt_node_preview_example -q

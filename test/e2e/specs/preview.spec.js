@@ -64,7 +64,7 @@ const frameUrl = async (page) => {
 test.describe('static frontend', () => {
   test('renders the unsaved paragraphs', async ({ page }) => {
     await editAndPreview(page)
-    const frame = await pickFrontend(page, 'E2E Frontends: Static', STATIC)
+    const frame = await pickFrontend(page, 'E2E Static', STATIC)
 
     await expect(frame.locator('#status')).toHaveClass(/ok/)
     await expect(frame.locator('h1')).toHaveText('E2E Preview test')
@@ -76,7 +76,7 @@ test.describe('static frontend', () => {
 
   test('the teaser view mode reaches the frontend', async ({ page }) => {
     await editAndPreview(page)
-    await pickFrontend(page, 'E2E Frontends: Static', STATIC)
+    await pickFrontend(page, 'E2E Static', STATIC)
 
     await page.locator(VIEW_MODES).selectOption('teaser')
     await expect(page).toHaveURL(/preview\/[0-9a-f-]+\/teaser/)
@@ -104,7 +104,7 @@ test.describe('druxt frontend', () => {
 
   test('renders the unsaved paragraphs through DruxtEntity', async ({ page }) => {
     await editAndPreview(page)
-    const frame = await pickFrontend(page, 'E2E Frontends: Druxt', DRUXT)
+    const frame = await pickFrontend(page, 'E2E Druxt', DRUXT)
 
     const root = frame.locator('.druxt-node-preview')
     await expect(root).toHaveAttribute('data-entity-type', 'node--article')
@@ -114,7 +114,7 @@ test.describe('druxt frontend', () => {
 
   test('the view mode reaches the Druxt page', async ({ page }) => {
     await editAndPreview(page)
-    await pickFrontend(page, 'E2E Frontends: Druxt', DRUXT)
+    await pickFrontend(page, 'E2E Druxt', DRUXT)
     await page.locator(VIEW_MODES).selectOption('teaser')
 
     const frame = page.frameLocator(FRAME)
