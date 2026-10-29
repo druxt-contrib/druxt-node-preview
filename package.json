@@ -64,7 +64,7 @@
   "peerDependencies": {
     "druxt": ">=0.25.0-0 <1",
     "druxt-entity": ">=0.29.0-0 <1",
-    "vue": "^2.7.0"
+    "vue": "^2.7.14"
   },
   "packageManager": "npm@8.19.4",
   "engines": {
