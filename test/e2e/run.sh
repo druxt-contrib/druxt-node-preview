@@ -10,7 +10,8 @@
 #      workflow still runs in full.
 # Then runs Playwright and tears everything down.
 #
-# Every port is overridable, so parallel environments never fight:
+# Every port is overridable, so runs from separate checkouts never fight. Two
+# runs from one checkout would share its Drupal site, so the second one stops:
 #   DRUPAL_PORT=8131 FRONTEND_STATIC_PORT=3112 FRONTEND_DRUXT_PORT=3111 ./run.sh
 set -euo pipefail
 
@@ -22,6 +23,8 @@ FRONTEND_DRUXT_PORT="${FRONTEND_DRUXT_PORT:-3111}"
 export FRONTEND_STATIC_PORT FRONTEND_DRUXT_PORT
 E2E_DRUXT="${E2E_DRUXT:-0}"
 PIDS=()
+LOCK="$ROOT/test/e2e/.run.lock"
+OWN_LOCK=0
 
 cleanup() {
   # Each server leads its own process group (setsid), so this also stops what
@@ -34,13 +37,21 @@ cleanup() {
   # A group still running after the wait gets SIGKILL, so the next run does
   # not find its port taken.
   for pid in "${PIDS[@]:-}"; do kill -KILL -- "-$pid" 2>/dev/null || true; done
+  if [ "$OWN_LOCK" = 1 ]; then rmdir "$LOCK" 2>/dev/null || true; fi
 }
 trap cleanup EXIT
 
-# Playwright needs Node 18 or later. The module's own toolchain stays on
+# mkdir is atomic, and flock does nothing on some container mounts.
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "Another run is using this checkout. Remove $LOCK if no run is active."
+  exit 1
+fi
+OWN_LOCK=1
+
+# Playwright needs Node 20 or later. The module's own toolchain stays on
 # Node 16 (.nvmrc), and CI runs this suite on Node 20.
-if [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 18 ]; then
-  echo "The end to end suite needs Node 18 or later for Playwright. This is $(node -v)."
+if [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]; then
+  echo "The end to end suite needs Node 20 or later for Playwright. This is $(node -v)."
   exit 1
 fi
 
