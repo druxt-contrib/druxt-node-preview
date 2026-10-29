@@ -1,0 +1,28 @@
+_meta:
+  version: '1.0'
+  entity_type: consumer
+  uuid: 0fa4d619-4c3f-4978-bbc7-ada44da1906d
+  default_langcode: en
+default:
+  owner_id:
+    -
+      target_id: 1
+  client_id:
+    -
+      value: example_frontend
+  label:
+    -
+      value: 'Example frontend'
+  third_party:
+    -
+      value: true
+  is_default:
+    -
+      value: false
+  status:
+    -
+      value: true
+  preview_targets:
+    -
+      label: Druxt
+      url: 'http://localhost:3000/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]'

@@ -43,6 +43,11 @@ export default {
       path: '/druxt/node/preview',
       // Relationships to include in the preview request.
       include: ['field_body'],
+      // Origins the preview may come from, besides this site and the
+      // baseUrl above, each a full URL such as 'https://cms.example.com'.
+      // The endpoint arrives in the URL fragment, which any link can set, so
+      // the page refuses every other origin.
+      origins: [],
     },
   },
 }

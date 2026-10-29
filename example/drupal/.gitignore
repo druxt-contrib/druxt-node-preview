@@ -1,0 +1,8 @@
+composer.lock
+vendor/
+web/
+/.editorconfig
+/.gitattributes
+# The scaffold's recipes folder, except the example's own recipe.
+/recipes/*
+!/recipes/druxt_node_preview_example/

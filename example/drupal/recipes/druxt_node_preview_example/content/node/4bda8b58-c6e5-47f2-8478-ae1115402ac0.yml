@@ -1,0 +1,47 @@
+_meta:
+  version: '1.0'
+  entity_type: node
+  uuid: 4bda8b58-c6e5-47f2-8478-ae1115402ac0
+  bundle: landing_page
+  default_langcode: en
+default:
+  status:
+    -
+      value: true
+  uid:
+    -
+      target_id: 1
+  title:
+    -
+      value: 'Preview example'
+  promote:
+    -
+      value: false
+  # Core's exporter does not follow paragraph references, so the paragraphs
+  # are written inline. The importer creates them, and saving the page sets
+  # each one's parent.
+  field_content:
+    -
+      entity:
+        _meta:
+          version: '1.0'
+          entity_type: paragraph
+          uuid: 7c2f1d4e-3b6a-4f0e-9a1d-2e5b8c7f6a01
+          bundle: text
+          default_langcode: en
+        default:
+          field_text:
+            -
+              value: 'Change this text, then press Preview.'
+    -
+      entity:
+        _meta:
+          version: '1.0'
+          entity_type: paragraph
+          uuid: 7c2f1d4e-3b6a-4f0e-9a1d-2e5b8c7f6a02
+          bundle: text
+          default_langcode: en
+        default:
+          field_text:
+            -
+              value: 'Add, remove or reorder the paragraphs too.'
