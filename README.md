@@ -102,15 +102,16 @@ hook the route.
    [preview layouts](#preview-layouts). The first one opens by default, so
    list `default` first.
 4. Allow the frontend's origin in the site's `services.yml`, with
-   credentials:
+   credentials. `cors.config` goes under `parameters`:
 
    ```yaml
-   cors.config:
-     enabled: true
-     allowedHeaders: ['*']
-     allowedMethods: ['GET']
-     allowedOrigins: ['https://frontend.example.com']
-     supportsCredentials: true
+   parameters:
+     cors.config:
+       enabled: true
+       allowedHeaders: ['*']
+       allowedMethods: ['GET']
+       allowedOrigins: ['https://frontend.example.com']
+       supportsCredentials: true
    ```
 
 5. Let Drupal show the frontend in a frame. An `X-Frame-Options` header, or a
@@ -232,10 +233,12 @@ page has the default one.
 
 The page shows "Preview unavailable" and a message.
 
-- **HTTP 404.** The editor's session cookie did not reach Drupal. The
-  frontend and Drupal must share a site. Use one host name for each: on
-  localhost, `localhost` and `127.0.0.1` are different sites. Check the CORS
-  settings too.
+- **HTTP 404.** Drupal has no preview of this node for the editor. The
+  editor may not have pressed Preview, or may not have access to the node.
+  Otherwise, the editor's session cookie did not reach Drupal. The frontend
+  and Drupal must share a site. Use one host name for each: on localhost,
+  `localhost` and `127.0.0.1` are different sites. Check the CORS settings
+  too.
 - **"The preview endpoint is not on this site or its Drupal site".** The
   endpoint's origin is not the frontend's, `druxt.baseUrl`'s or one in
   `origins`. Add it to `origins`.
@@ -244,14 +247,17 @@ The page shows "Preview unavailable" and a message.
 - **HTTP 400.** An `include` path that the previewed type does not have. Key
   that path by type.
 
-A missing schema from `DruxtEntity` means the bundle has no view display for
-the previewed view mode. Create the display. `test/e2e/TROUBLESHOOTING.md`
-covers the end to end stack.
+A missing schema from `DruxtEntity` usually means the bundle has no view
+display for the previewed view mode. Create the display. Drupal can also have
+been unreachable when Nuxt built the schema, or `.nuxt` can hold an old one.
+Restart the frontend after Drupal is up. `test/e2e/TROUBLESHOOTING.md` covers
+the end to end stack.
 
 ## Writing another frontend
 
 Consumer Node Preview's README shows how a frontend reads the document URL
-from the fragment. Any link can set the fragment. So a frontend checks these
+from the fragment, including the `https:/` repair that some routers need.
+Any link can set the fragment. So a frontend checks these
 before it renders anything:
 
 - the endpoint's origin, against its own and Drupal's;
