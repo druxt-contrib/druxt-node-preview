@@ -130,9 +130,9 @@ test.describe('druxt frontend', () => {
 
   test('the Layout select renders the preview in a listed layout', async ({ page }) => {
     await editAndPreview(page)
-    await pickFrontend(page, 'E2E Frontends: Druxt', DRUXT)
+    await pickFrontend(page, 'E2E Druxt', DRUXT)
 
-    // The consumer lists "default" first, so the preview opens in the site's
+    // The target lists "default" first, so the preview opens in the site's
     // own layout.
     let frame = page.frameLocator(FRAME)
     await frameExpect(frame.locator('.druxt-node-preview')).toContainText(EDITED)
