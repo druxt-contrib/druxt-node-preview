@@ -7,6 +7,14 @@
 
 # @druxt-contrib/node-preview
 
+<!--
+[![npm](https://badgen.net/npm/v/@druxt-contrib/node-preview)](https://www.npmjs.com/package/@druxt-contrib/node-preview)
+[![Known Vulnerabilities](https://snyk.io/test/github/druxt-contrib/druxt-node-preview/badge.svg?targetFile=package.json)](https://snyk.io/test/github/druxt-contrib/druxt-node-preview?targetFile=package.json)
+-->
+[![CI](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml/badge.svg?branch=0.x)](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml)
+
+> Node Preview module for Druxt
+
 Renders Drupal node previews in a [Druxt](https://druxtjs.org) frontend. An
 editor who presses Preview in Drupal sees the unsaved content rendered by the
 real frontend, paragraphs included.
@@ -18,6 +26,13 @@ Works with two Drupal modules:
 - [Consumer Node Preview](https://www.drupal.org/project/consumer_node_preview)
   turns Drupal's preview screen into Frontend, Drupal and JSON:API tabs, and
   frames this module's page in the Frontend tab.
+
+## Links
+
+- [DruxtJS](https://druxtjs.org)
+- [Community Discord server](https://discord.druxtjs.org)
+- [Consumer Node Preview project page](https://www.drupal.org/project/consumer_node_preview)
+- [JSON:API Node Preview project page](https://www.drupal.org/project/jsonapi_node_preview)
 
 ## How it works
 
@@ -62,25 +77,31 @@ export default {
   druxt: {
     baseUrl: 'https://drupal.example.com',
     nodePreview: {
-      // The preview page's path. This is the default.
-      path: '/druxt/node/preview',
-      // Relationships to add to the endpoint's own include. Consumer Node
-      // Preview already includes a node's paragraphs, so add what they
-      // reference, such as 'field_content.field_media'. JSON:API rejects a
-      // path the previewed type does not have, so key paths that only some
-      // bundles have by type: { 'node--page': ['field_content.field_media'] }.
-      include: [],
-      // Origins the preview may come from, besides this site and the
-      // baseUrl above, each a full URL such as 'https://cms.example.com'.
-      // The endpoint arrives in the URL fragment, which any link can set, so
-      // the page refuses every other origin.
-      origins: [],
-      // Nuxt layouts the preview may render in, picked with ?layout=.
-      layouts: [],
+      include: { 'node--page': ['field_content.field_media'] },
+      origins: ['https://cms.example.com'],
+      layouts: ['default', 'preview'],
     },
   },
 }
 ```
+
+## Options
+
+| Option | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `druxt.nodePreview.path` | `string` | No | `'/druxt/node/preview'` | The preview page's path. |
+| `druxt.nodePreview.include` | `array` or `object` | No | `[]` | Relationships to add to the endpoint's own include. |
+| `druxt.nodePreview.origins` | `array` | No | `[]` | Origins the preview may come from, besides this site and `baseUrl`. Each is a full URL. |
+| `druxt.nodePreview.layouts` | `array` | No | `[]` | Nuxt layouts the preview may render in, picked with `?layout=`. See [Preview layouts](#preview-layouts). |
+
+Consumer Node Preview already includes a node's paragraphs, so `include` adds
+what they reference, such as `field_content.field_media`. JSON:API rejects a
+path the previewed type does not have. Key a path that only some bundles have
+by type, as in the example above.
+
+The endpoint arrives in the URL fragment, which any link can set. So the page
+refuses an endpoint from any origin other than this site, `baseUrl` and
+`origins`.
 
 The module reports an option value it cannot use in the build output, and
 leaves it out.
