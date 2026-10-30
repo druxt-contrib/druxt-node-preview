@@ -12,8 +12,10 @@
 [![Known Vulnerabilities](https://snyk.io/test/github/druxt-contrib/druxt-node-preview/badge.svg?targetFile=package.json)](https://snyk.io/test/github/druxt-contrib/druxt-node-preview?targetFile=package.json)
 -->
 
+[![dev](https://badgen.net/npm/v/@druxt-contrib/node-preview/dev)](https://www.npmjs.com/package/@druxt-contrib/node-preview/v/dev)
 [![CI](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml/badge.svg?branch=0.x)](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/druxt-contrib/druxt-node-preview/branch/0.x/graph/badge.svg)](https://codecov.io/gh/druxt-contrib/druxt-node-preview)
+[![Discord](https://img.shields.io/discord/753866667590680587?label=discord&logo=discord&logoColor=white)](https://discord.druxtjs.org)
 
 > Node Preview module for Druxt
 
