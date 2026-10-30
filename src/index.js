@@ -191,7 +191,7 @@ const NuxtModule = function (moduleOptions = {}) {
   // modules:done hook, so druxt.baseUrl is known. Nuxt calls ready in dev,
   // start, build and generate, and waits for it, so a build does not exit
   // before the request ends. Each request has a short timeout.
-  const register = resolveRegister(options.register, process.env, druxt)
+  const register = resolveRegister(options.register, process.env)
   if (register && this.nuxt) {
     this.nuxt.hook('ready', () =>
       registerOnce(() =>

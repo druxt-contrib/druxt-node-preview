@@ -83,23 +83,18 @@ const toBaseUrl = (value) => {
  * environment:
  *
  * - DRUXT_NODE_PREVIEW_URL over `url`.
- * - The consumer's client ID comes from the first of these that is set:
- *   DRUXT_NODE_PREVIEW_CLIENT_ID, `consumer`, druxt-auth's
- *   `druxt.auth.clientId`, and then DRUXT_AUTH_CLIENT_ID. druxt-auth is
- *   not needed. It only saves setting the client ID twice.
+ * - DRUXT_NODE_PREVIEW_CLIENT_ID over `consumer`.
  * - DRUXT_NODE_PREVIEW_CLIENT_SECRET is the only source of the secret.
- *   druxt-auth's secret is never read.
  *
  * A value the module cannot use gives a warning. Without a URL, a consumer
  * or a secret, registration is off.
  *
  * @param {*} value - The `register` option.
  * @param {object} env - The environment, such as process.env.
- * @param {object} [druxt] - The druxt options, for druxt-auth's client ID.
  *
  * @returns {object|null} The url, label, consumer, secret and timeout.
  */
-export const resolveRegister = (value, env, druxt = {}) => {
+export const resolveRegister = (value, env) => {
   if (value === undefined || value === null || value === false) return null
   if (value !== true && (typeof value !== 'object' || Array.isArray(value))) {
     warn(
@@ -134,13 +129,8 @@ export const resolveRegister = (value, env, druxt = {}) => {
     return null
   }
 
-  const auth = (druxt && druxt.auth) || {}
-  const consumer = [
-    fromEnv(env, 'DRUXT_NODE_PREVIEW_CLIENT_ID'),
-    options.consumer,
-    auth.clientId,
-    fromEnv(env, 'DRUXT_AUTH_CLIENT_ID'),
-  ].find((id) => id !== undefined && id !== null && id !== '')
+  const consumer =
+    fromEnv(env, 'DRUXT_NODE_PREVIEW_CLIENT_ID') || options.consumer
   if (typeof consumer !== 'string' || !/^[\x21-\x7e]+$/.test(consumer)) {
     warn(
       "Ignored the register option: it has no usable consumer. Set druxt.nodePreview.register.consumer or DRUXT_NODE_PREVIEW_CLIENT_ID to the consumer's client ID."

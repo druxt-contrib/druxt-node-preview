@@ -197,37 +197,6 @@ describe('resolveRegister', () => {
     )
   })
 
-  test("the consumer falls back to druxt-auth's client ID", () => {
-    const url = 'https://www.example.com'
-    const auth = {
-      auth: { clientId: 'auth-option', clientSecret: 'auth-secret-value' },
-    }
-    const authEnv = { ...env, DRUXT_AUTH_CLIENT_ID: 'auth-env' }
-
-    // The order: DRUXT_NODE_PREVIEW_CLIENT_ID, register.consumer,
-    // druxt.auth.clientId, then DRUXT_AUTH_CLIENT_ID.
-    expect(
-      resolveRegister(
-        { url, consumer: 'option' },
-        { ...authEnv, DRUXT_NODE_PREVIEW_CLIENT_ID: 'env' },
-        auth
-      ).consumer
-    ).toBe('env')
-    expect(
-      resolveRegister({ url, consumer: 'option' }, authEnv, auth).consumer
-    ).toBe('option')
-    expect(resolveRegister({ url }, authEnv, auth).consumer).toBe('auth-option')
-    expect(resolveRegister({ url }, authEnv, {}).consumer).toBe('auth-env')
-    expect(resolveRegister({ url }, authEnv, undefined).consumer).toBe(
-      'auth-env'
-    )
-
-    // druxt-auth's secret is never used.
-    expect(resolveRegister({ url }, env, auth).secret).toBe(SECRET)
-    expect(resolveRegister({ url }, {}, auth)).toBeNull()
-    expect(printed().join('\n')).not.toContain('auth-secret-value')
-  })
-
   test('a missing or bad consumer is reported and turns registration off', () => {
     expect(resolveRegister({ url: 'https://www.example.com' }, env)).toBeNull()
     expect(warn).toHaveBeenLastCalledWith(
