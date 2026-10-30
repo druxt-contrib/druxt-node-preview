@@ -5,7 +5,8 @@ A paired Drupal and Nuxt setup for trying the preview flow end to end.
 ## Drupal
 
 `drupal/composer.json` builds a Drupal site with Consumer Node Preview,
-Paragraphs and Druxt, from Drupal.org. Consumer Node Preview comes from its
+Paragraphs, Druxt and Simple OAuth, from Drupal.org. Simple OAuth needs PHP's
+`sodium` extension. Consumer Node Preview comes from its
 `1.0.x-dev` release. JSON:API Node Preview gets the paragraph fixes from
 <https://www.drupal.org/i/3367724> as a patch. Without them, a preview shows the
 saved paragraphs, not the edited ones.
@@ -25,7 +26,10 @@ Text paragraph type, a Landing page content type with a Content field of
 paragraphs, and a Landing page with two paragraphs to preview. Its Example
 frontend consumer has a preview target for the Nuxt app below, and lists the
 `default` and `preview` layouts. The first opens by default, and the example
-app has a bare `preview` layout.
+app has a bare `preview` layout. The recipe also sets up the consumer for
+automatic registration. It adds a Preview target registrar role and a
+`preview_targets` scope. Its `preview_registrar` user is the consumer's owner
+and its Client credentials user.
 
 Then:
 
@@ -66,3 +70,27 @@ npm run dev
 ```
 
 Edit the Landing page in Drupal, press Preview, and pick the frontend.
+
+To let the app register its own preview target, give the Example frontend
+consumer a secret in its form, and make Simple OAuth's keys:
+
+```sh
+cd drupal
+mkdir -p keys
+vendor/bin/drush simple-oauth:generate-keys "$PWD/keys"
+vendor/bin/drush config:set simple_oauth.settings public_key "$PWD/keys/public.key" -y
+vendor/bin/drush config:set simple_oauth.settings private_key "$PWD/keys/private.key" -y
+```
+
+Then start the app with the consumer's details in the environment:
+
+```sh
+cd nuxt
+DRUXT_NODE_PREVIEW_URL=http://localhost:3000 \
+DRUXT_NODE_PREVIEW_CLIENT_ID=example_frontend \
+DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' \
+npm run dev
+```
+
+The recipe's target already matches, so the build output says that the target
+is up to date.
