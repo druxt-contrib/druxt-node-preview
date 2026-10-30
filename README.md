@@ -27,8 +27,7 @@ data renders through the same components as the live site.
 
 ## Requirements
 
-- Druxt 0.25 and Druxt Entity 0.29, through `druxt-site` 0.15. Until they are
-  released, they come from the `dev` tag.
+- Druxt 0.25 and Druxt Entity 0.29 or later, through `druxt-site` 0.15.
 - Node 16 to build the site. Druxt's schema tools do not work on newer Node.
 - Drupal with Consumer Node Preview and JSON:API Node Preview. JSON:API Node
   Preview 1.0.0-beta5 and earlier serve stale or missing paragraphs. Until a
@@ -40,11 +39,8 @@ data renders through the same components as the live site.
 
 ## Install
 
-Install `druxt-site` from the `dev` tag first, then this module:
-
 ```sh
-npm install druxt-site@dev
-npm install @druxt-contrib/node-preview
+npm install druxt-site @druxt-contrib/node-preview
 ```
 
 A site without `druxt-site` lists `druxt-entity` in `modules` instead.
@@ -257,8 +253,8 @@ the end to end stack.
 
 Consumer Node Preview's README shows how a frontend reads the document URL
 from the fragment, including the `https:/` repair that some routers need.
-Any link can set the fragment. So a frontend checks these
-before it renders anything:
+Any link can set the fragment, so a frontend checks these before it renders
+anything:
 
 - the endpoint's origin, against its own and Drupal's;
 - that the endpoint is a node preview, ending in `/{uuid}/preview`;
