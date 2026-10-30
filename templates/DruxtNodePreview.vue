@@ -65,14 +65,15 @@ export default {
 
     slots(h) {
       return {
-        default: () => h('DruxtEntity', {
-          key: this.entity.id,
-          props: {
-            mode: this.mode,
-            type: this.entity.type,
-            uuid: this.entity.id,
-          },
-        }),
+        default: () =>
+          h('DruxtEntity', {
+            key: this.entity.id,
+            props: {
+              mode: this.mode,
+              type: this.entity.type,
+              uuid: this.entity.id,
+            },
+          }),
       }
     },
   },

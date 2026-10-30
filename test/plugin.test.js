@@ -7,12 +7,25 @@ const path = require('path')
 const loadPlugin = (include = ['field_body']) => {
   const source = fs
     .readFileSync(path.resolve(__dirname, '../templates/plugin.js'), 'utf8')
-    .replace("'<%= JSON.stringify(options.include) %>'", "'" + JSON.stringify(include) + "'")
-    .replace("'<%= JSON.stringify(options.origins) %>'", '\'["https://example.com"]\'')
-    .replace("'<%= JSON.stringify(options.layouts) %>'", '\'["default","preview"]\'')
+    .replace(
+      "'<%= JSON.stringify(options.include) %>'",
+      "'" + JSON.stringify(include) + "'"
+    )
+    .replace(
+      "'<%= JSON.stringify(options.origins) %>'",
+      '\'["https://example.com"]\''
+    )
+    .replace(
+      "'<%= JSON.stringify(options.layouts) %>'",
+      '\'["default","preview"]\''
+    )
     .replace('export default', 'module.exports.default =')
   const mod = { exports: {} }
-  new Function('module', 'exports', 'require', source)(mod, mod.exports, require)
+  new Function('module', 'exports', 'require', source)(
+    mod,
+    mod.exports,
+    require
+  )
   return mod.exports
 }
 
@@ -24,12 +37,17 @@ const P2 = '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f'
 const ENDPOINT = `https://example.com/jsonapi/node/article/${UUID}/preview`
 
 /** A JSON:API response, as the Druxt client resolves it. */
-const axiosJsonApi = (doc, type = 'application/vnd.api+json') => ({ data: doc, headers: { 'content-type': type } })
+const axiosJsonApi = (doc, type = 'application/vnd.api+json') => ({
+  data: doc,
+  headers: { 'content-type': type },
+})
 
 /** A JSON:API response, as window.fetch resolves it. */
 const jsonApi = (doc, type = 'application/vnd.api+json') => ({
   ok: true,
-  headers: { get: (name) => (name.toLowerCase() === 'content-type' ? type : null) },
+  headers: {
+    get: (name) => (name.toLowerCase() === 'content-type' ? type : null),
+  },
   json: async () => doc,
 })
 
@@ -40,10 +58,14 @@ const buildPlugin = (app = {}, include = undefined) => {
     state: {},
     commit: (name, payload) => commits.push({ name, payload }),
     hasModule: (name) => !!modules[name],
-    registerModule: (name, module) => { modules[name] = module },
+    registerModule: (name, module) => {
+      modules[name] = module
+    },
   }
   let injected
-  loadPlugin(include).default({ app, store }, (name, value) => { injected = { name, value } })
+  loadPlugin(include).default({ app, store }, (name, value) => {
+    injected = { name, value }
+  })
   return { commits, injected, modules }
 }
 
@@ -68,8 +90,11 @@ describe('$druxtNodePreview plugin', () => {
 
   test('endpoint comes from the fragment', () => {
     const { injected } = buildPlugin()
-    window.location.hash = '#https%3A%2F%2Fexample.com%2Fjsonapi%2Fnode%2Farticle%2Fabc%2Fpreview'
-    expect(injected.value.endpoint()).toBe('https://example.com/jsonapi/node/article/abc/preview')
+    window.location.hash =
+      '#https%3A%2F%2Fexample.com%2Fjsonapi%2Fnode%2Farticle%2Fabc%2Fpreview'
+    expect(injected.value.endpoint()).toBe(
+      'https://example.com/jsonapi/node/article/abc/preview'
+    )
     window.location.hash = ''
     expect(injected.value.endpoint()).toBe(null)
   })
@@ -93,7 +118,7 @@ describe('$druxtNodePreview plugin', () => {
 
     expect(get).toHaveBeenCalledWith(
       `${ENDPOINT}?include=field_body`,
-      expect.objectContaining({ withCredentials: true }),
+      expect.objectContaining({ withCredentials: true })
     )
     expect(result).toBe(doc)
   })
@@ -101,7 +126,9 @@ describe('$druxtNodePreview plugin', () => {
   test('fetch through the client refuses an origin that is not allowed', async () => {
     const get = jest.fn()
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
-    await expect(injected.value.fetch('https://evil.example/doc.json')).rejects.toThrow('not on this site')
+    await expect(
+      injected.value.fetch('https://evil.example/doc.json')
+    ).rejects.toThrow('not on this site')
     expect(get).not.toHaveBeenCalled()
   })
 
@@ -109,20 +136,32 @@ describe('$druxtNodePreview plugin', () => {
   // a workspace header to its own API requests. An absolute URL on the
   // frontend's origin would slip past them.
   test('fetch hands a path endpoint to the Druxt client as a path', async () => {
-    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }))
+    const get = jest
+      .fn()
+      .mockResolvedValue(
+        axiosJsonApi({ data: { type: 'node--article', id: UUID } })
+      )
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
     await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
-    expect(get.mock.calls[0][0]).toBe(`/jsonapi/node/article/${UUID}/preview?include=field_body`)
+    expect(get.mock.calls[0][0]).toBe(
+      `/jsonapi/node/article/${UUID}/preview?include=field_body`
+    )
   })
 
-  test('fetch merges the configured include into the endpoint\'s include', async () => {
-    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }))
+  test("fetch merges the configured include into the endpoint's include", async () => {
+    const get = jest
+      .fn()
+      .mockResolvedValue(
+        axiosJsonApi({ data: { type: 'node--article', id: UUID } })
+      )
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
     const path = `/jsonapi/node/article/${UUID}/preview`
 
     await injected.value.fetch(`${ENDPOINT}?include=field_content`)
     await injected.value.fetch(`${ENDPOINT}?include=field_body,field_content`)
-    await injected.value.fetch(`${path}?resourceVersion=rel%3Alatest-version&include=field_content`)
+    await injected.value.fetch(
+      `${path}?resourceVersion=rel%3Alatest-version&include=field_content`
+    )
 
     expect(get.mock.calls.map((call) => call[0])).toEqual([
       `${ENDPOINT}?include=field_content,field_body`,
@@ -132,13 +171,24 @@ describe('$druxtNodePreview plugin', () => {
   })
 
   test('fetch through the client refuses a response that is not JSON:API', async () => {
-    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }, 'text/plain'))
+    const get = jest
+      .fn()
+      .mockResolvedValue(
+        axiosJsonApi(
+          { data: { type: 'node--article', id: UUID } },
+          'text/plain'
+        )
+      )
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
-    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow('not a JSON:API document')
+    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(
+      'not a JSON:API document'
+    )
   })
 
   test('fetch through the client reports the status and body', async () => {
-    const error = Object.assign(new Error('x'), { response: { status: 403, data: { errors: [{ title: 'denied' }] } } })
+    const error = Object.assign(new Error('x'), {
+      response: { status: 403, data: { errors: [{ title: 'denied' }] } },
+    })
     const get = jest.fn().mockRejectedValue(error)
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
     await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(/403.*denied/)
@@ -153,17 +203,23 @@ describe('$druxtNodePreview plugin', () => {
 
     expect(window.fetch).toHaveBeenCalledWith(
       `${ENDPOINT}?include=field_body`,
-      expect.objectContaining({ credentials: 'include' }),
+      expect.objectContaining({ credentials: 'include' })
     )
     expect(result).toBe(doc)
   })
 
   test('endpoint repairs a scheme the router collapsed', () => {
     const { injected } = buildPlugin()
-    window.location.hash = '#https:/example.com/jsonapi/node/article/abc/preview'
-    expect(injected.value.endpoint()).toBe('https://example.com/jsonapi/node/article/abc/preview')
-    window.location.hash = '#http:/localhost:8080/jsonapi/node/article/abc/preview'
-    expect(injected.value.endpoint()).toBe('http://localhost:8080/jsonapi/node/article/abc/preview')
+    window.location.hash =
+      '#https:/example.com/jsonapi/node/article/abc/preview'
+    expect(injected.value.endpoint()).toBe(
+      'https://example.com/jsonapi/node/article/abc/preview'
+    )
+    window.location.hash =
+      '#http:/localhost:8080/jsonapi/node/article/abc/preview'
+    expect(injected.value.endpoint()).toBe(
+      'http://localhost:8080/jsonapi/node/article/abc/preview'
+    )
     window.location.hash = '#https://example.com/p'
     expect(injected.value.endpoint()).toBe('https://example.com/p')
     window.location.hash = ''
@@ -172,28 +228,40 @@ describe('$druxtNodePreview plugin', () => {
   test('fetch refuses an endpoint on an origin that is not allowed', async () => {
     const { injected } = buildPlugin()
     window.fetch = jest.fn()
-    await expect(injected.value.fetch('https://evil.example/doc.json')).rejects.toThrow('not on this site')
-    await expect(injected.value.fetch('//evil.example/doc.json')).rejects.toThrow('not on this site')
+    await expect(
+      injected.value.fetch('https://evil.example/doc.json')
+    ).rejects.toThrow('not on this site')
+    await expect(
+      injected.value.fetch('//evil.example/doc.json')
+    ).rejects.toThrow('not on this site')
     expect(window.fetch).not.toHaveBeenCalled()
   })
 
-  test('fetch takes a path on the page\'s own origin', async () => {
+  test("fetch takes a path on the page's own origin", async () => {
     const { injected } = buildPlugin()
-    window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
+    window.fetch = jest
+      .fn()
+      .mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
     await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
     expect(window.fetch).toHaveBeenCalled()
   })
 
   test('fetch without the Druxt client keeps a path endpoint relative', async () => {
     const { injected } = buildPlugin()
-    window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
+    window.fetch = jest
+      .fn()
+      .mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
     await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
-    expect(window.fetch.mock.calls[0][0]).toBe(`/jsonapi/node/article/${UUID}/preview?include=field_body`)
+    expect(window.fetch.mock.calls[0][0]).toBe(
+      `/jsonapi/node/article/${UUID}/preview?include=field_body`
+    )
   })
 
   test('fetch throws on a failed response', async () => {
     const { injected } = buildPlugin()
-    window.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
+    window.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
     await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(/403.*denied/)
   })
 
@@ -211,8 +279,14 @@ describe('$druxtNodePreview plugin', () => {
 
     expect(entity).toEqual({ type: 'node--article', id: UUID })
     expect(commits).toHaveLength(4)
-    expect(commits[3]).toEqual({ name: 'druxtNodePreview/start', payload: UUID })
-    expect(commits[0]).toEqual({ name: 'druxt/addResource', payload: { resource: { data: doc.data } } })
+    expect(commits[3]).toEqual({
+      name: 'druxtNodePreview/start',
+      payload: UUID,
+    })
+    expect(commits[0]).toEqual({
+      name: 'druxt/addResource',
+      payload: { resource: { data: doc.data } },
+    })
     expect(commits[2].payload.resource.data.id).toBe(P2)
   })
 
@@ -222,27 +296,48 @@ describe('$druxtNodePreview plugin', () => {
   test('fetch refuses an endpoint that is not a node preview', async () => {
     const { injected } = buildPlugin()
     window.fetch = jest.fn()
-    await expect(injected.value.fetch('https://example.com/system/files/x.txt')).rejects.toThrow('not a node preview')
-    await expect(injected.value.fetch(`${ENDPOINT}/../../../../system/files/x.txt`)).rejects.toThrow('not a node preview')
-    await expect(injected.value.fetch('https://example.com/jsonapi/node/article/abc/preview')).rejects.toThrow('not a node preview')
+    await expect(
+      injected.value.fetch('https://example.com/system/files/x.txt')
+    ).rejects.toThrow('not a node preview')
+    await expect(
+      injected.value.fetch(`${ENDPOINT}/../../../../system/files/x.txt`)
+    ).rejects.toThrow('not a node preview')
+    await expect(
+      injected.value.fetch(
+        'https://example.com/jsonapi/node/article/abc/preview'
+      )
+    ).rejects.toThrow('not a node preview')
     expect(window.fetch).not.toHaveBeenCalled()
   })
 
   test('fetch refuses a response that is not JSON:API', async () => {
     const { injected } = buildPlugin()
-    window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }, 'text/plain'))
-    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow('not a JSON:API document')
+    window.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        jsonApi({ data: { type: 'node--article', id: UUID } }, 'text/plain')
+      )
+    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(
+      'not a JSON:API document'
+    )
   })
 
   test('fetch refuses a document for another node', async () => {
     const { injected } = buildPlugin()
-    window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: P1 } }))
-    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow('not a preview of')
+    window.fetch = jest
+      .fn()
+      .mockResolvedValue(jsonApi({ data: { type: 'node--article', id: P1 } }))
+    await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(
+      'not a preview of'
+    )
   })
 
   test('seed refuses an unsafe document before it stores anything', () => {
     const { injected, commits } = buildPlugin()
-    const withInclude = (included) => ({ data: { type: 'node--article', id: UUID }, included: [included] })
+    const withInclude = (included) => ({
+      data: { type: 'node--article', id: UUID },
+      included: [included],
+    })
     for (const doc of [
       withInclude({ type: 'node--page', id: '__proto__' }),
       withInclude({ type: '__proto__', id: P1 }),
@@ -253,15 +348,20 @@ describe('$druxtNodePreview plugin', () => {
       { data: null },
       'not a document',
     ]) {
-      expect(() => injected.value.seed(doc)).toThrow('not a node preview document')
+      expect(() => injected.value.seed(doc)).toThrow(
+        'not a node preview document'
+      )
     }
     expect(commits).toHaveLength(0)
   })
 
   // DruxtEntity reads a resource under its language: its langcode prop, else
   // the route's langcode meta. The preview's DruxtEntity has no langcode prop.
-  test('seed stores under the route\'s language, where DruxtEntity reads', () => {
-    const router = { beforeEach: () => {}, currentRoute: { name: 'druxt-node-preview', meta: { langcode: 'es' } } }
+  test("seed stores under the route's language, where DruxtEntity reads", () => {
+    const router = {
+      beforeEach: () => {},
+      currentRoute: { name: 'druxt-node-preview', meta: { langcode: 'es' } },
+    }
     const { injected, commits } = buildPlugin({ router })
     injected.value.seed({ data: { type: 'node--article', id: UUID } })
     expect(commits[0].payload.prefix).toBe('es')
@@ -272,7 +372,12 @@ describe('$druxtNodePreview plugin', () => {
     let preview
 
     beforeEach(() => {
-      const router = { currentRoute: { name: 'druxt-node-preview' }, beforeEach: (fn) => { guard = fn } }
+      const router = {
+        currentRoute: { name: 'druxt-node-preview' },
+        beforeEach: (fn) => {
+          guard = fn
+        },
+      }
       preview = buildPlugin({ router })
       preview.injected.value.seed({
         data: { type: 'node--article', id: UUID },
@@ -288,8 +393,14 @@ describe('$druxtNodePreview plugin', () => {
       guard({ name: 'docs' }, { name: 'druxt-node-preview' }, next)
 
       expect(preview.commits).toEqual([
-        { name: 'druxt/flushResource', payload: { type: 'node--article', id: UUID } },
-        { name: 'druxt/flushResource', payload: { type: 'paragraph--text', id: P1 } },
+        {
+          name: 'druxt/flushResource',
+          payload: { type: 'node--article', id: UUID },
+        },
+        {
+          name: 'druxt/flushResource',
+          payload: { type: 'paragraph--text', id: P1 },
+        },
         { name: 'druxtNodePreview/stop', payload: undefined },
       ])
       expect(next).toHaveBeenCalledWith()
@@ -305,7 +416,11 @@ describe('$druxtNodePreview plugin', () => {
     test('leaves other navigation alone', () => {
       const next = jest.fn()
       guard({ name: 'docs' }, { name: 'index' }, next)
-      guard({ name: 'druxt-node-preview' }, { name: 'druxt-node-preview' }, next)
+      guard(
+        { name: 'druxt-node-preview' },
+        { name: 'druxt-node-preview' },
+        next
+      )
       expect(preview.commits).toEqual([])
       expect(next.mock.calls).toEqual([[], []])
     })
@@ -319,55 +434,106 @@ describe('$druxtNodePreview plugin', () => {
     // changes currentRoute only after that. So a fetch that ends in between
     // still sees the preview route.
     beforeEach(() => {
-      const router = { currentRoute: { name: 'druxt-node-preview' }, beforeEach: (fn) => { guard = fn } }
+      const router = {
+        currentRoute: { name: 'druxt-node-preview' },
+        beforeEach: (fn) => {
+          guard = fn
+        },
+      }
       preview = buildPlugin({ router })
     })
 
     test('seeds nothing', () => {
       guard({ name: 'docs' }, { name: 'druxt-node-preview' }, jest.fn())
-      expect(preview.injected.value.seed({ data: { type: 'node--article', id: UUID } })).toBeNull()
+      expect(
+        preview.injected.value.seed({
+          data: { type: 'node--article', id: UUID },
+        })
+      ).toBeNull()
       expect(preview.commits).toEqual([])
     })
 
     test('does not stop the next preview from seeding', () => {
       guard({ name: 'docs' }, { name: 'druxt-node-preview' }, jest.fn())
       guard({ name: 'druxt-node-preview' }, { name: 'docs' }, jest.fn())
-      expect(preview.injected.value.seed({ data: { type: 'node--article', id: UUID } })).toEqual({ type: 'node--article', id: UUID })
+      expect(
+        preview.injected.value.seed({
+          data: { type: 'node--article', id: UUID },
+        })
+      ).toEqual({ type: 'node--article', id: UUID })
     })
   })
 
   test('a per type include goes only on that type', async () => {
     const uuid = '0f8e7d6c-5b4a-4c3d-9e2f-1a0b9c8d7e6f'
-    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--page', id: uuid } }))
-    const { injected } = buildPlugin({ $druxt: { axios: { get } } }, { 'node--page': ['field_content.field_media'] })
-    await injected.value.fetch('/jsonapi/node/page/' + uuid + '/preview?include=field_content')
-    await injected.value.fetch('/jsonapi/node/article/' + uuid + '/preview?include=field_body')
-    expect(get.mock.calls[0][0]).toBe('/jsonapi/node/page/' + uuid + '/preview?include=field_content,field_content.field_media')
-    expect(get.mock.calls[1][0]).toBe('/jsonapi/node/article/' + uuid + '/preview?include=field_body')
+    const get = jest
+      .fn()
+      .mockResolvedValue(
+        axiosJsonApi({ data: { type: 'node--page', id: uuid } })
+      )
+    const { injected } = buildPlugin(
+      { $druxt: { axios: { get } } },
+      { 'node--page': ['field_content.field_media'] }
+    )
+    await injected.value.fetch(
+      '/jsonapi/node/page/' + uuid + '/preview?include=field_content'
+    )
+    await injected.value.fetch(
+      '/jsonapi/node/article/' + uuid + '/preview?include=field_body'
+    )
+    expect(get.mock.calls[0][0]).toBe(
+      '/jsonapi/node/page/' +
+        uuid +
+        '/preview?include=field_content,field_content.field_media'
+    )
+    expect(get.mock.calls[1][0]).toBe(
+      '/jsonapi/node/article/' + uuid + '/preview?include=field_body'
+    )
   })
 
   test('a preview that resolves after leaving seeds nothing', () => {
-    const { injected, commits } = buildPlugin({ router: { currentRoute: { name: 'docs' }, beforeEach: () => {} } })
-    expect(injected.value.seed({ data: { type: 'node--page', id: UUID } })).toBe(null)
+    const { injected, commits } = buildPlugin({
+      router: { currentRoute: { name: 'docs' }, beforeEach: () => {} },
+    })
+    expect(
+      injected.value.seed({ data: { type: 'node--page', id: UUID } })
+    ).toBe(null)
     expect(commits).toHaveLength(0)
   })
 
   // nuxt-i18n adds a language suffix to route names.
   describe('a preview route with a language suffix', () => {
     test('seeds', () => {
-      const router = { currentRoute: { name: 'druxt-node-preview___en' }, beforeEach: () => {} }
+      const router = {
+        currentRoute: { name: 'druxt-node-preview___en' },
+        beforeEach: () => {},
+      }
       const { injected } = buildPlugin({ router })
-      expect(injected.value.seed({ data: { type: 'node--article', id: UUID } })).toEqual({ type: 'node--article', id: UUID })
+      expect(
+        injected.value.seed({ data: { type: 'node--article', id: UUID } })
+      ).toEqual({ type: 'node--article', id: UUID })
     })
 
     test('flushes when the editor leaves it', () => {
       let guard
-      const router = { currentRoute: { name: 'druxt-node-preview___en' }, beforeEach: (fn) => { guard = fn } }
+      const router = {
+        currentRoute: { name: 'druxt-node-preview___en' },
+        beforeEach: (fn) => {
+          guard = fn
+        },
+      }
       const { injected, commits } = buildPlugin({ router })
       injected.value.seed({ data: { type: 'node--article', id: UUID } })
       commits.length = 0
-      guard({ name: 'docs___en' }, { name: 'druxt-node-preview___en' }, jest.fn())
-      expect(commits.map((commit) => commit.name)).toEqual(['druxt/flushResource', 'druxtNodePreview/stop'])
+      guard(
+        { name: 'docs___en' },
+        { name: 'druxt-node-preview___en' },
+        jest.fn()
+      )
+      expect(commits.map((commit) => commit.name)).toEqual([
+        'druxt/flushResource',
+        'druxtNodePreview/stop',
+      ])
     })
   })
 })

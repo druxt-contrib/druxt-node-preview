@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit skips any review over 100 changed files. The filters below leave
+# out the files nobody writes by hand, so the review covers the module, its
+# tests, the tooling and the pipelines, which is what a reviewer can act on.
+language: en-AU
+reviews:
+  path_filters:
+    # Lock files.
+    - '!**/package-lock.json'
+    - '!**/composer.lock'
+    # Composer's scaffolded docroot and vendor directory, if a local build
+    # ever lands in a change.
+    - '!example/drupal/web/**'
+    - '!example/drupal/vendor/**'
+  auto_review:
+    enabled: true
+    drafts: false

@@ -7,11 +7,12 @@
 
 # @druxt-contrib/node-preview
 
-<!--
-[![npm](https://badgen.net/npm/v/@druxt-contrib/node-preview)](https://www.npmjs.com/package/@druxt-contrib/node-preview)
-[![Known Vulnerabilities](https://snyk.io/test/github/druxt-contrib/druxt-node-preview/badge.svg?targetFile=package.json)](https://snyk.io/test/github/druxt-contrib/druxt-node-preview?targetFile=package.json)
--->
+[![npm](https://img.shields.io/npm/v/@druxt-contrib/node-preview)](https://www.npmjs.com/package/@druxt-contrib/node-preview)
+[![npm@dev](https://img.shields.io/npm/v/@druxt-contrib/node-preview/dev)](https://www.npmjs.com/package/@druxt-contrib/node-preview/v/dev)
 [![CI](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml/badge.svg?branch=0.x)](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/druxt-contrib/druxt-node-preview/branch/0.x/graph/badge.svg)](https://codecov.io/gh/druxt-contrib/druxt-node-preview)
+[![Known Vulnerabilities](https://snyk.io/test/github/druxt-contrib/druxt-node-preview/badge.svg?targetFile=package.json)](https://snyk.io/test/github/druxt-contrib/druxt-node-preview?targetFile=package.json)
+[![Discord](https://img.shields.io/discord/753866667590680587?label=discord&logo=discord&logoColor=white)](https://discord.druxtjs.org)
 
 > Node Preview module for Druxt
 
@@ -44,7 +45,7 @@ The frontend needs:
 Drupal needs:
 
 - Consumer Node Preview and JSON:API Node Preview.
-- The fixes from https://www.drupal.org/i/3367724 for JSON:API Node Preview.
+- The fixes from <https://www.drupal.org/i/3367724> for JSON:API Node Preview.
   Version 1.0.0-beta5 and earlier show stale or missing paragraphs without
   them. The [example's
   `composer.json`](https://github.com/druxt-contrib/druxt-node-preview/blob/0.x/example/drupal/composer.json)
@@ -63,10 +64,7 @@ npm install druxt-site @druxt-contrib/node-preview
 ```js
 // nuxt.config.js
 export default {
-  modules: [
-    '@druxt-contrib/node-preview',
-    'druxt-site',
-  ],
+  modules: ['@druxt-contrib/node-preview', 'druxt-site'],
   druxt: {
     baseUrl: 'https://cms.example.com',
     nodePreview: {
@@ -84,12 +82,12 @@ A site without `druxt-site` lists `druxt-entity` in `modules` instead.
 
 All options are optional.
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `druxt.nodePreview.path` | `string` | `'/druxt/node/preview'` | The preview page's path. |
-| `druxt.nodePreview.include` | `array` or `object` | `[]` | Relationships to add to the preview request. |
-| `druxt.nodePreview.origins` | `array` | `[]` | More origins the preview may come from. Each is a full URL. |
-| `druxt.nodePreview.layouts` | `array` | `[]` | Nuxt layouts the preview may use. See [Preview layouts](#preview-layouts). |
+| Option                      | Type                | Default                 | Description                                                                |
+| --------------------------- | ------------------- | ----------------------- | -------------------------------------------------------------------------- |
+| `druxt.nodePreview.path`    | `string`            | `'/druxt/node/preview'` | The preview page's path.                                                   |
+| `druxt.nodePreview.include` | `array` or `object` | `[]`                    | Relationships to add to the preview request.                               |
+| `druxt.nodePreview.origins` | `array`             | `[]`                    | More origins the preview may come from. Each is a full URL.                |
+| `druxt.nodePreview.layouts` | `array`             | `[]`                    | Nuxt layouts the preview may use. See [Preview layouts](#preview-layouts). |
 
 **include.** Consumer Node Preview already includes a node's paragraphs. Add
 what the paragraphs reference, such as `field_content.field_media`. JSON:API
@@ -117,6 +115,7 @@ module ignores it. The page's route name is `druxt-node-preview`.
 
    Drupal fills in the parts in square brackets when the editor presses
    Preview. Keep them as they are.
+
 3. Optional: under **Preview layouts**, add one layout name in each box. Put
    `default` first, because the preview opens in the first one. See
    [Preview layouts](#preview-layouts).
@@ -134,6 +133,7 @@ module ignores it. The page's route name is `druxt-node-preview`.
    ```
 
    Then rebuild the caches with `drush cr`.
+
 5. Let the frontend show in Drupal's frame. Remove any `X-Frame-Options`
    header from the frontend's responses. If the frontend sends a
    `frame-ancestors` rule, add Drupal's origin to it. Name only Drupal's
@@ -274,8 +274,8 @@ The page shows "Preview unavailable" and a message.
   3. The CORS settings in `services.yml` name the frontend's origin.
 - **"The preview endpoint is not on this site or its Drupal site".** Add the
   preview's origin to the `origins` option.
-- **"No preview endpoint was provided in the URL fragment".** The preview
-  target's URL template has no `#[jsonapi_node_preview]` at the end.
+- **"The URL fragment has no preview endpoint".** The preview target's URL
+  template has no `#[jsonapi_node_preview]` at the end.
 - **HTTP 400.** An `include` path that the previewed type does not have. Key
   that path by type.
 

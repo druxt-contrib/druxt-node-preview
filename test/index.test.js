@@ -17,8 +17,13 @@ const buildContext = (druxtOptions = {}) => {
     return { dst: template.fileName }
   }
   context.addPlugin = (plugin) => context.addedPlugins.push(plugin)
-  context.nuxt = { hook: (name, fn) => { context.hooks[name] = fn } }
-  context.extendRoutes = (fn) => fn(context.routes, (...parts) => parts.join('/'))
+  context.nuxt = {
+    hook: (name, fn) => {
+      context.hooks[name] = fn
+    },
+  }
+  context.extendRoutes = (fn) =>
+    fn(context.routes, (...parts) => parts.join('/'))
   return context
 }
 
@@ -53,17 +58,28 @@ describe('DruxtNodePreview module', () => {
       baseUrl: 'https://drupal.example.com/',
       nodePreview: {
         include: ['field_media', "x'); alert(1); ('", 7],
-        origins: ['https://cms.example.com/path', 'javascript:alert(1)', 'not a url'],
+        origins: [
+          'https://cms.example.com/path',
+          'javascript:alert(1)',
+          'not a url',
+        ],
       },
     })
     NuxtModule.call(context)
     expect(context.addedPlugins[0].options.include).toEqual(['field_media'])
-    expect(context.addedPlugins[0].options.origins).toEqual(['https://drupal.example.com', 'https://cms.example.com'])
+    expect(context.addedPlugins[0].options.origins).toEqual([
+      'https://drupal.example.com',
+      'https://cms.example.com',
+    ])
   })
 
   test('module options override the defaults', () => {
     const context = buildContext()
-    NuxtModule.call(context, { path: '/preview', include: ['field_body'], layouts: ['bare', 'not a name'] })
+    NuxtModule.call(context, {
+      path: '/preview',
+      include: ['field_body'],
+      layouts: ['bare', 'not a name'],
+    })
 
     expect(context.routes[0].path).toBe('/preview')
     expect(context.addedPlugins[0].options.include).toEqual(['field_body'])
@@ -71,12 +87,21 @@ describe('DruxtNodePreview module', () => {
   })
 
   test('nuxt.config druxt.nodePreview options are used', () => {
-    const context = buildContext({ nodePreview: { path: '/p', include: ['field_a'], layouts: ['default', 'preview'] } })
+    const context = buildContext({
+      nodePreview: {
+        path: '/p',
+        include: ['field_a'],
+        layouts: ['default', 'preview'],
+      },
+    })
     NuxtModule.call(context)
 
     expect(context.routes[0].path).toBe('/p')
     expect(context.addedPlugins[0].options.include).toEqual(['field_a'])
-    expect(context.addedPlugins[0].options.layouts).toEqual(['default', 'preview'])
+    expect(context.addedPlugins[0].options.layouts).toEqual([
+      'default',
+      'preview',
+    ])
   })
 
   // druxt-site sets druxt.baseUrl from its own module options, and Nuxt may
@@ -86,32 +111,53 @@ describe('DruxtNodePreview module', () => {
     NuxtModule.call(context)
     context.options.druxt = { baseUrl: 'https://late.example.com/' }
     context.hooks['modules:done']()
-    expect(context.addedPlugins[0].options.origins).toEqual(['https://late.example.com'])
+    expect(context.addedPlugins[0].options.origins).toEqual([
+      'https://late.example.com',
+    ])
   })
 
   test('an origin that is not an http(s) URL is reported, not dropped quietly', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    const context = buildContext({ nodePreview: { origins: ['https://cms.example.com', 'cms.example.com'] } })
+    const context = buildContext({
+      nodePreview: { origins: ['https://cms.example.com', 'cms.example.com'] },
+    })
     NuxtModule.call(context)
-    expect(context.addedPlugins[0].options.origins).toEqual(['https://cms.example.com'])
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"cms.example.com"'))
+    expect(context.addedPlugins[0].options.origins).toEqual([
+      'https://cms.example.com',
+    ])
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"cms.example.com"')
+    )
     warn.mockRestore()
   })
 
   test('an origins option that is not a list is reported, not dropped quietly', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    const context = buildContext({ nodePreview: { origins: 'https://cms.example.com' } })
+    const context = buildContext({
+      nodePreview: { origins: 'https://cms.example.com' },
+    })
     NuxtModule.call(context)
     expect(context.addedPlugins[0].options.origins).toEqual([])
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Ignored the origins option'))
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Ignored the origins option')
+    )
     warn.mockRestore()
   })
 
   test('an include value that is not plain is reported, not dropped quietly', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    const context = buildContext({ nodePreview: { include: { 'node--page': ['field_media', 'bad path'], page: ['field_x'] } } })
+    const context = buildContext({
+      nodePreview: {
+        include: {
+          'node--page': ['field_media', 'bad path'],
+          page: ['field_x'],
+        },
+      },
+    })
     NuxtModule.call(context)
-    expect(context.addedPlugins[0].options.include).toEqual({ 'node--page': ['field_media'] })
+    expect(context.addedPlugins[0].options.include).toEqual({
+      'node--page': ['field_media'],
+    })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"bad path"'))
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"page"'))
     warn.mockRestore()
@@ -119,7 +165,9 @@ describe('DruxtNodePreview module', () => {
 
   test('a layout name that is not plain is reported, not dropped quietly', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    const context = buildContext({ nodePreview: { layouts: ['preview', 'docs/bare', 7] } })
+    const context = buildContext({
+      nodePreview: { layouts: ['preview', 'docs/bare', 7] },
+    })
     NuxtModule.call(context)
     expect(context.addedPlugins[0].options.layouts).toEqual(['preview'])
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"docs/bare"'))

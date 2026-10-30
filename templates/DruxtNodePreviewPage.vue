@@ -5,10 +5,7 @@
     :data-entity-type="entity && entity.type"
     :data-entity-uuid="entity && entity.id"
   >
-    <div
-      v-if="error"
-      class="druxt-node-preview-error"
-    >
+    <div v-if="error" class="druxt-node-preview-error">
       <h1>Preview unavailable</h1>
       <p>{{ error }}</p>
     </div>
@@ -20,9 +17,7 @@
       :mode="viewMode"
     />
 
-    <p v-else>
-      Loading preview...
-    </p>
+    <p v-else>Loading preview...</p>
   </div>
 </template>
 
@@ -48,7 +43,8 @@ export default {
    *
    * @returns {string|undefined} The layout, or undefined for the default.
    */
-  layout: ({ $druxtNodePreview, route }) => $druxtNodePreview.layout(route.query.layout),
+  layout: ({ $druxtNodePreview, route }) =>
+    $druxtNodePreview.layout(route.query.layout),
 
   data: () => ({
     document: null,
@@ -77,7 +73,9 @@ export default {
       // says "Loading chunk" in the message. Any other error is a fault in
       // the layout, so it goes to the console too.
       const report = (error) => {
-        if (!/chunk/i.test(`${error && error.name} ${error && error.message}`)) {
+        if (
+          !/chunk/i.test(`${error && error.name} ${error && error.message}`)
+        ) {
           console.error('DruxtNodePreview could not load the layout:', error)
         }
       }
@@ -93,12 +91,10 @@ export default {
           report(state.err)
           this.$nuxt.error(null)
           await new Promise((done) => setTimeout(done))
-        }
-        else {
+        } else {
           this.$nuxt.setLayout(layout)
         }
-      }
-      catch (error) {
+      } catch (error) {
         report(error)
       }
       // A new layout mounts a new page, which loads the preview. If this one
@@ -143,7 +139,7 @@ export default {
       try {
         const endpoint = this.$druxtNodePreview.endpoint()
         if (!endpoint) {
-          this.error = 'No preview endpoint was provided in the URL fragment.'
+          this.error = 'The URL fragment has no preview endpoint.'
           return
         }
         const document = await this.$druxtNodePreview.fetch(endpoint)
@@ -157,8 +153,7 @@ export default {
         if (!entity) return
         this.entity = entity
         this.document = document
-      }
-      catch (error) {
+      } catch (error) {
         if (run === this.run) this.error = error.message
       }
     },

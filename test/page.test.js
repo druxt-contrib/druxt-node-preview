@@ -15,7 +15,9 @@ const context = (layout, layoutName) => ({
     layoutName,
     loadLayout: jest.fn().mockResolvedValue(),
     // Nuxt sets the name at once, and a new name mounts a new page.
-    setLayout: jest.fn(function (name) { this.layoutName = name }),
+    setLayout: jest.fn(function (name) {
+      this.layoutName = name
+    }),
   },
 })
 
@@ -30,7 +32,12 @@ describe('DruxtNodePreviewPage', () => {
 
   test('the layout hook asks the plugin about ?layout=', () => {
     const preview = { layout: jest.fn(() => 'bare') }
-    expect(Page.layout({ $druxtNodePreview: preview, route: { query: { layout: 'bare' } } })).toBe('bare')
+    expect(
+      Page.layout({
+        $druxtNodePreview: preview,
+        route: { query: { layout: 'bare' } },
+      })
+    ).toBe('bare')
     expect(preview.layout).toHaveBeenCalledWith('bare')
   })
 
@@ -72,7 +79,9 @@ describe('DruxtNodePreviewPage', () => {
   test('mounted loads the preview when the layout fails to load', async () => {
     // A layout chunk can fail to download. The preview still shows.
     const page = { ...context('bare', 'default'), error: null }
-    page.$nuxt.loadLayout = jest.fn().mockRejectedValue(new Error('Loading chunk failed'))
+    page.$nuxt.loadLayout = jest
+      .fn()
+      .mockRejectedValue(new Error('Loading chunk failed'))
     page.$druxtNodePreview.endpoint = () => '/jsonapi/node/page/uuid/preview'
     page.$druxtNodePreview.fetch = jest.fn().mockResolvedValue({ data: {} })
     page.$druxtNodePreview.seed = jest.fn(() => null)
@@ -86,12 +95,17 @@ describe('DruxtNodePreviewPage', () => {
     // A fault in the layout itself is not a download failure, so it shows in
     // the console. The preview still loads in the layout the page has.
     const page = { ...context('bare', 'default'), error: null }
-    page.$nuxt.loadLayout = jest.fn().mockRejectedValue(new TypeError('layout is broken'))
+    page.$nuxt.loadLayout = jest
+      .fn()
+      .mockRejectedValue(new TypeError('layout is broken'))
     page.$druxtNodePreview.endpoint = () => '/jsonapi/node/page/uuid/preview'
     page.$druxtNodePreview.fetch = jest.fn().mockResolvedValue({ data: {} })
     page.$druxtNodePreview.seed = jest.fn(() => null)
     await Page.mounted.call(page)
-    expect(console.error).toHaveBeenCalledWith(expect.any(String), expect.any(TypeError))
+    expect(console.error).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(TypeError)
+    )
     expect(page.$druxtNodePreview.fetch).toHaveBeenCalled()
   })
 
@@ -99,7 +113,9 @@ describe('DruxtNodePreviewPage', () => {
   // own error() with a 500 and resolves, and then shows its error page.
   const failingNuxt = (page, message) => {
     page.$nuxt.nuxt = { err: null }
-    page.$nuxt.error = jest.fn(function (err) { this.nuxt.err = err || null })
+    page.$nuxt.error = jest.fn(function (err) {
+      this.nuxt.err = err || null
+    })
     page.$nuxt.loadLayout = jest.fn(function () {
       return Promise.resolve(this.error({ statusCode: 500, message }))
     })
@@ -123,17 +139,27 @@ describe('DruxtNodePreviewPage', () => {
     failingNuxt(page, 'layout is broken')
     await Page.mounted.call(page)
     expect(page.$nuxt.nuxt.err).toBeNull()
-    expect(console.error).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message: 'layout is broken' }))
+    expect(console.error).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ message: 'layout is broken' })
+    )
     expect(page.$druxtNodePreview.fetch).toHaveBeenCalled()
   })
 
   test('mounted loads the preview when the layout is already set', async () => {
     const page = { ...context('bare', 'bare'), error: null }
     page.$druxtNodePreview.endpoint = () => '/jsonapi/node/page/uuid/preview'
-    page.$druxtNodePreview.fetch = jest.fn().mockResolvedValue({ data: { type: 'node--page', id: 'uuid' } })
-    page.$druxtNodePreview.seed = jest.fn(() => ({ type: 'node--page', id: 'uuid' }))
+    page.$druxtNodePreview.fetch = jest
+      .fn()
+      .mockResolvedValue({ data: { type: 'node--page', id: 'uuid' } })
+    page.$druxtNodePreview.seed = jest.fn(() => ({
+      type: 'node--page',
+      id: 'uuid',
+    }))
     await Page.mounted.call(page)
-    expect(page.$druxtNodePreview.fetch).toHaveBeenCalledWith('/jsonapi/node/page/uuid/preview')
+    expect(page.$druxtNodePreview.fetch).toHaveBeenCalledWith(
+      '/jsonapi/node/page/uuid/preview'
+    )
     expect(page.entity).toEqual({ type: 'node--page', id: 'uuid' })
   })
 
@@ -150,7 +176,9 @@ describe('DruxtNodePreviewPage', () => {
       $druxtNodePreview: {
         layout: jest.fn(() => undefined),
         endpoint: () => '/jsonapi/node/page/uuid/preview',
-        fetch: jest.fn().mockResolvedValue({ data: { type: 'node--page', id: 'uuid' } }),
+        fetch: jest
+          .fn()
+          .mockResolvedValue({ data: { type: 'node--page', id: 'uuid' } }),
         seed: jest.fn(() => null),
       },
       $route: { query: {} },
@@ -173,7 +201,12 @@ describe('DruxtNodePreviewPage', () => {
       $druxtNodePreview: {
         layout: jest.fn(() => undefined),
         endpoint: () => '/jsonapi/node/page/uuid/preview',
-        fetch: jest.fn(() => new Promise((done) => { resolve = done })),
+        fetch: jest.fn(
+          () =>
+            new Promise((done) => {
+              resolve = done
+            })
+        ),
         seed: jest.fn(() => ({ type: 'node--page', id: 'uuid' })),
       },
       $route: { query: {} },
@@ -196,7 +229,9 @@ describe('DruxtNodePreviewPage', () => {
       $druxtNodePreview: {
         layout: jest.fn(() => undefined),
         endpoint: () => '/jsonapi/node/page/uuid/preview',
-        fetch: jest.fn().mockResolvedValue({ data: { type: 'node--page', id: 'uuid' } }),
+        fetch: jest
+          .fn()
+          .mockResolvedValue({ data: { type: 'node--page', id: 'uuid' } }),
         seed: jest.fn(() => ({ type: 'node--page', id: 'uuid' })),
       },
       $route: { query: {} },
@@ -222,7 +257,12 @@ describe('DruxtNodePreviewPage', () => {
       $druxtNodePreview: {
         layout: jest.fn(() => undefined),
         endpoint: () => '/jsonapi/node/page/uuid/preview',
-        fetch: jest.fn(() => new Promise((done) => { resolve = done })),
+        fetch: jest.fn(
+          () =>
+            new Promise((done) => {
+              resolve = done
+            })
+        ),
         seed: jest.fn(() => ({ type: 'node--page', id: 'uuid' })),
       },
       $route: { query: {} },
@@ -243,7 +283,8 @@ describe('DruxtNodePreviewPage', () => {
       $druxtNodePreview: {
         layout: jest.fn(() => undefined),
         endpoint: () => '/jsonapi/node/page/uuid/preview',
-        fetch: jest.fn()
+        fetch: jest
+          .fn()
           .mockRejectedValueOnce(new Error('HTTP 502'))
           .mockResolvedValue({ data: { type: 'node--page', id: 'uuid' } }),
         seed: jest.fn(() => ({ type: 'node--page', id: 'uuid' })),
@@ -269,9 +310,15 @@ describe('DruxtNodePreviewPage', () => {
       $druxtNodePreview: {
         layout: jest.fn(() => undefined),
         endpoint: () => '/jsonapi/node/page/uuid/preview',
-        fetch: jest.fn()
+        fetch: jest
+          .fn()
           .mockResolvedValueOnce({ data: { type: 'node--page', id: 'uuid' } })
-          .mockImplementation(() => new Promise((done) => { resolve = done })),
+          .mockImplementation(
+            () =>
+              new Promise((done) => {
+                resolve = done
+              })
+          ),
         seed: jest.fn(() => ({ type: 'node--page', id: 'uuid' })),
       },
       $route: { query: {} },
@@ -293,7 +340,8 @@ describe('DruxtNodePreviewPage', () => {
   // The view mode comes from the query, which any link can set. A list, or a
   // name that is not a machine name, gives the default.
   test('viewMode takes only a machine name from ?vm=', () => {
-    const viewMode = (vm) => Page.computed.viewMode.call({ $route: { query: { vm } } })
+    const viewMode = (vm) =>
+      Page.computed.viewMode.call({ $route: { query: { vm } } })
     expect(viewMode('teaser')).toBe('teaser')
     expect(viewMode(undefined)).toBe('full')
     expect(viewMode(['teaser', 'full'])).toBe('full')

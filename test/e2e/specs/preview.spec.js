@@ -18,8 +18,13 @@ const LAYOUTS = '[data-consumer-node-preview-layout]'
 const VIEW_MODES = '[data-consumer-node-preview-view-mode]'
 
 test.beforeAll(() => {
-  for (const [name, value] of [['DRUPAL_URL', DRUPAL], ['DRUPAL_LOGIN_LINK', LOGIN], ['FRONTEND_STATIC_URL', STATIC]]) {
-    if (!value) throw new Error(`${name} must be set. Use test/e2e/run.sh or export it.`)
+  for (const [name, value] of [
+    ['DRUPAL_URL', DRUPAL],
+    ['DRUPAL_LOGIN_LINK', LOGIN],
+    ['FRONTEND_STATIC_URL', STATIC],
+  ]) {
+    if (!value)
+      throw new Error(`${name} must be set. Use test/e2e/run.sh or export it.`)
   }
 })
 
@@ -32,16 +37,22 @@ test.beforeAll(() => {
 const editAndPreview = async (page) => {
   // The session comes from the shared storage state (test/e2e/global-setup.js).
   await page.goto(`${DRUPAL}/node/1/edit`)
-  await page.locator('input[name="field_body[0][subform][field_text][0][value]"]').fill(EDITED)
+  await page
+    .locator('input[name="field_body[0][subform][field_text][0][value]"]')
+    .fill(EDITED)
   await page.getByRole('button', { name: 'Add Text' }).click()
-  const added = page.locator('input[name="field_body[2][subform][field_text][0][value]"]')
+  const added = page.locator(
+    'input[name="field_body[2][subform][field_text][0][value]"]'
+  )
   await added.waitFor()
   await added.fill(ADDED)
   await page.getByRole('button', { name: 'Preview' }).click()
   await expect(page).toHaveURL(/node\/preview/)
   // The screen's script marks the screen once its handlers are attached.
   // Before that, a changed select does nothing.
-  await page.locator('[data-consumer-node-preview][data-once~="consumer-node-preview"]').waitFor()
+  await page
+    .locator('[data-consumer-node-preview][data-once~="consumer-node-preview"]')
+    .waitFor()
 }
 
 /**
@@ -52,7 +63,9 @@ const editAndPreview = async (page) => {
  */
 const pickFrontend = async (page, label, frontend) => {
   await page.locator(TARGETS).selectOption({ label })
-  await expect.poll(() => frameUrl(page).then((url) => url && url.origin)).toBe(new URL(frontend).origin)
+  await expect
+    .poll(() => frameUrl(page).then((url) => url && url.origin))
+    .toBe(new URL(frontend).origin)
   return page.frameLocator(FRAME)
 }
 
@@ -82,7 +95,12 @@ test.describe('static frontend', () => {
     await page.locator(VIEW_MODES).selectOption('teaser')
     await expect(page).toHaveURL(/preview\/[0-9a-f-]+\/teaser/)
     // The frontend stays picked across the view mode switch.
-    await expect.poll(() => frameUrl(page).then((url) => url && [url.origin, url.searchParams.get('vm')]))
+    await expect
+      .poll(() =>
+        frameUrl(page).then(
+          (url) => url && [url.origin, url.searchParams.get('vm')]
+        )
+      )
       .toEqual([new URL(STATIC).origin, 'teaser'])
 
     const frame = page.frameLocator(FRAME)
@@ -92,11 +110,13 @@ test.describe('static frontend', () => {
     await expect(frame.locator('.para')).toHaveText(EDITED)
   })
 
-  test('the Drupal tab shows core\'s preview', async ({ page }) => {
+  test("the Drupal tab shows core's preview", async ({ page }) => {
     await editAndPreview(page)
     await page.getByRole('tab', { name: 'Drupal' }).click()
     await expect(page.locator('#consumer-node-preview-drupal')).toBeVisible()
-    await expect(page.locator('#consumer-node-preview-drupal')).toContainText(EDITED)
+    await expect(page.locator('#consumer-node-preview-drupal')).toContainText(
+      EDITED
+    )
   })
 })
 
@@ -108,12 +128,17 @@ test.describe('druxt frontend', () => {
   // more than the default expect timeout, before the frame has any content.
   const frameExpect = expect.configure({ timeout: 30000 })
 
-  test('renders the unsaved paragraphs through DruxtEntity', async ({ page }) => {
+  test('renders the unsaved paragraphs through DruxtEntity', async ({
+    page,
+  }) => {
     await editAndPreview(page)
     const frame = await pickFrontend(page, 'E2E Druxt', DRUXT)
 
     const root = frame.locator('.druxt-node-preview')
-    await frameExpect(root).toHaveAttribute('data-entity-type', 'node--e2e_article')
+    await frameExpect(root).toHaveAttribute(
+      'data-entity-type',
+      'node--e2e_article'
+    )
     await expect(root).toContainText(EDITED)
     await expect(root).toContainText(ADDED)
   })
@@ -125,17 +150,24 @@ test.describe('druxt frontend', () => {
     await expect(page).toHaveURL(/preview\/[0-9a-f-]+\/teaser/)
 
     const frame = page.frameLocator(FRAME)
-    await frameExpect(frame.locator('.druxt-node-preview')).toHaveAttribute('data-view-mode', 'teaser')
+    await frameExpect(frame.locator('.druxt-node-preview')).toHaveAttribute(
+      'data-view-mode',
+      'teaser'
+    )
   })
 
-  test('the Layout select renders the preview in a listed layout', async ({ page }) => {
+  test('the Layout select renders the preview in a listed layout', async ({
+    page,
+  }) => {
     await editAndPreview(page)
     await pickFrontend(page, 'E2E Druxt', DRUXT)
 
     // The target lists "default" first, so the preview opens in the site's
     // own layout.
     let frame = page.frameLocator(FRAME)
-    await frameExpect(frame.locator('.druxt-node-preview')).toContainText(EDITED)
+    await frameExpect(frame.locator('.druxt-node-preview')).toContainText(
+      EDITED
+    )
     await expect(frame.locator('.layout-preview')).toHaveCount(0)
 
     await page.locator(LAYOUTS).selectOption('preview')
@@ -143,7 +175,11 @@ test.describe('druxt frontend', () => {
     frame = page.frameLocator(FRAME)
     // The page sets the layout itself once mounted, and the new layout's page
     // loads the preview.
-    await frameExpect(frame.locator('.layout-preview .druxt-node-preview')).toContainText(EDITED)
-    await expect(frame.locator('.layout-preview .druxt-node-preview')).toContainText(ADDED)
+    await frameExpect(
+      frame.locator('.layout-preview .druxt-node-preview')
+    ).toContainText(EDITED)
+    await expect(
+      frame.locator('.layout-preview .druxt-node-preview')
+    ).toContainText(ADDED)
   })
 })
