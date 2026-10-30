@@ -1,7 +1,7 @@
 <!-- vale off -->
 <!-- The alt text describes what the banner shows: the @druxt-contrib/node-preview mark, name and description. The name-colon-description form trips ColonUsage. -->
 <a href="https://druxtjs.org">
-  <img src=".github/banner.svg" alt="@druxt-contrib/node-preview: Node Preview module for Druxt">
+  <img src="https://raw.githubusercontent.com/druxt-contrib/druxt-node-preview/0.x/.github/banner.svg" alt="@druxt-contrib/node-preview: Node Preview module for Druxt">
 </a>
 <!-- vale on -->
 
@@ -15,57 +15,50 @@
 
 > Node Preview module for Druxt
 
-Renders Drupal node previews in a [Druxt](https://druxtjs.org) frontend. An
-editor who presses Preview in Drupal sees the unsaved content rendered by the
-real frontend, paragraphs included.
+Shows an unsaved Drupal node in your [Druxt](https://druxtjs.org) frontend.
+The editor presses Preview in Drupal and sees the node as the live site will
+show it, paragraphs included.
 
-Works with two Drupal modules:
+![The Frontend tab of a Drupal preview, showing an unsaved node rendered by the Druxt frontend](https://raw.githubusercontent.com/druxt-contrib/druxt-node-preview/0.x/.github/preview.png)
+
+It works with two Drupal modules:
 
 - [JSON:API Node Preview](https://www.drupal.org/project/jsonapi_node_preview)
-  serves the unsaved preview over JSON:API.
+  serves the unsaved node over JSON:API.
 - [Consumer Node Preview](https://www.drupal.org/project/consumer_node_preview)
-  turns Drupal's preview screen into Frontend, Drupal and JSON:API tabs, and
-  frames this module's page in the Frontend tab.
+  adds Frontend, Drupal and JSON:API tabs to Drupal's preview. The Frontend tab
+  shows this module's page.
 
 ## Links
 
 - [DruxtJS](https://druxtjs.org)
 - [Community Discord server](https://discord.druxtjs.org)
-- [Consumer Node Preview project page](https://www.drupal.org/project/consumer_node_preview)
-- [JSON:API Node Preview project page](https://www.drupal.org/project/jsonapi_node_preview)
-
-## How it works
-
-1. The editor presses Preview in Drupal. The Frontend tab frames this
-   module's page, with the JSON:API preview endpoint in the URL fragment, so
-   it never reaches any server log.
-2. The page reads the fragment and fetches the endpoint with the editor's
-   Drupal session.
-3. It seeds the Druxt store with the document and its includes, then renders
-   the node through a themeable `DruxtNodePreview` wrapper and `DruxtEntity`.
-
-Because the store is seeded before `DruxtEntity` resolves, the unsaved preview
-data renders through the same components as the live site.
 
 ## Requirements
 
+The frontend needs:
+
 - Druxt 0.25 and Druxt Entity 0.29 or later, through `druxt-site` 0.15.
-- Node 16 to build the site. Druxt's schema tools do not work on newer Node.
-- Drupal with Consumer Node Preview and JSON:API Node Preview. JSON:API Node
-  Preview 1.0.0-beta5 and earlier serve stale or missing paragraphs. Until a
-  release includes them, apply the fixes from
-  https://www.drupal.org/i/3367724. `example/drupal/composer.json` applies
-  them with composer-patches.
-- A frontend on the same site as Drupal, such as `www.example.com` and
-  `cms.example.com`. See [The request](#the-request).
+- Node 16 for the build. Druxt's schema build fails on newer Node.
+
+Drupal needs:
+
+- Consumer Node Preview and JSON:API Node Preview.
+- The fixes from https://www.drupal.org/i/3367724 for JSON:API Node Preview.
+  Version 1.0.0-beta5 and earlier show stale or missing paragraphs without
+  them. The [example's
+  `composer.json`](https://github.com/druxt-contrib/druxt-node-preview/blob/0.x/example/drupal/composer.json)
+  applies them with composer-patches.
+
+Both need one parent domain, such as `www.example.com` for the frontend and
+`cms.example.com` for Drupal. The editor's Drupal session cookie does not
+reach a frontend on another domain.
 
 ## Install
 
 ```sh
 npm install druxt-site @druxt-contrib/node-preview
 ```
-
-A site without `druxt-site` lists `druxt-entity` in `modules` instead.
 
 ```js
 // nuxt.config.js
@@ -75,7 +68,7 @@ export default {
     'druxt-site',
   ],
   druxt: {
-    baseUrl: 'https://drupal.example.com',
+    baseUrl: 'https://cms.example.com',
     nodePreview: {
       include: { 'node--page': ['field_content.field_media'] },
       origins: ['https://cms.example.com'],
@@ -85,48 +78,50 @@ export default {
 }
 ```
 
+A site without `druxt-site` lists `druxt-entity` in `modules` instead.
+
 ## Options
 
-| Option | Type | Required | Default | Description |
-| --- | --- | --- | --- | --- |
-| `druxt.nodePreview.path` | `string` | No | `'/druxt/node/preview'` | The preview page's path. |
-| `druxt.nodePreview.include` | `array` or `object` | No | `[]` | Relationships to add to the endpoint's own include. |
-| `druxt.nodePreview.origins` | `array` | No | `[]` | Origins the preview may come from, besides this site and `baseUrl`. Each is a full URL. |
-| `druxt.nodePreview.layouts` | `array` | No | `[]` | Nuxt layouts the preview may render in, picked with `?layout=`. See [Preview layouts](#preview-layouts). |
+All options are optional.
 
-Consumer Node Preview already includes a node's paragraphs, so `include` adds
-what they reference, such as `field_content.field_media`. JSON:API rejects a
-path the previewed type does not have. Key a path that only some bundles have
-by type, as in the example above.
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `druxt.nodePreview.path` | `string` | `'/druxt/node/preview'` | The preview page's path. |
+| `druxt.nodePreview.include` | `array` or `object` | `[]` | Relationships to add to the preview request. |
+| `druxt.nodePreview.origins` | `array` | `[]` | More origins the preview may come from. Each is a full URL. |
+| `druxt.nodePreview.layouts` | `array` | `[]` | Nuxt layouts the preview may use. See [Preview layouts](#preview-layouts). |
 
-The endpoint arrives in the URL fragment, which any link can set. So the page
-refuses an endpoint from any origin other than this site, `baseUrl` and
-`origins`.
+**include.** Consumer Node Preview already includes a node's paragraphs. Add
+what the paragraphs reference, such as `field_content.field_media`. JSON:API
+refuses a path that the previewed type does not have. Key a path by type when
+only some bundles have it, as in the example above.
 
-The module reports an option value it cannot use in the build output, and
-leaves it out.
+**origins.** Any link can put an endpoint in the page's URL. So the page only
+fetches from this site, from `druxt.baseUrl`, and from `origins`. The editor's
+session cookie goes with each request to those origins.
 
-The page's route name is `druxt-node-preview`. It is stable, so a site can
-hook the route.
+A value the module cannot use shows a warning in the build output, and the
+module ignores it. The page's route name is `druxt-node-preview`.
 
 ## Drupal setup
 
 1. Install Consumer Node Preview and JSON:API Node Preview, with the fixes
-   under [Requirements](#requirements).
-2. Edit a consumer at **Administration > Configuration > Web services >
-   Consumers**, and add a preview target that points at the page:
+   from [Requirements](#requirements).
+2. Go to **Administration > Configuration > Web services > Consumers** and
+   edit the frontend's consumer. Under **Preview targets**, add a label and
+   this URL template, with your frontend's host:
 
    ```text
-   https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]
+   https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]
    ```
 
-   `vm` holds the view mode, and `layout` the layout picked in the preview's
-   Layout select. The endpoint goes in the fragment.
-3. List the consumer's Preview layouts, if the site uses
-   [preview layouts](#preview-layouts). The first one opens by default, so
-   list `default` first.
-4. Allow the frontend's origin in the site's `services.yml`, with
-   credentials. `cors.config` goes under `parameters`:
+   Drupal fills in the parts in square brackets when the editor presses
+   Preview. Keep them as they are.
+3. Optional: under **Preview layouts**, add one layout name in each box. Put
+   `default` first, because the preview opens in the first one. See
+   [Preview layouts](#preview-layouts).
+4. In the site's `services.yml`, such as `sites/default/services.yml`, allow
+   the frontend's origin with credentials. Name the origin. Do not use `'*'`.
 
    ```yaml
    parameters:
@@ -134,34 +129,54 @@ hook the route.
        enabled: true
        allowedHeaders: ['*']
        allowedMethods: ['GET']
-       allowedOrigins: ['https://frontend.example.com']
+       allowedOrigins: ['https://www.example.com']
        supportsCredentials: true
    ```
 
-5. Let Drupal show the frontend in a frame. An `X-Frame-Options` header, or a
-   `frame-ancestors` rule that leaves out Drupal's origin, blocks the
-   Frontend tab. A `frame-ancestors` rule that names only Drupal's origin
-   also stops other sites framing the preview.
+   Then rebuild the caches with `drush cr`.
+5. Let the frontend show in Drupal's frame. Remove any `X-Frame-Options`
+   header from the frontend's responses. If the frontend sends a
+   `frame-ancestors` rule, add Drupal's origin to it. Name only Drupal's
+   origin, so other sites cannot frame the preview.
 
-Consumer Node Preview's README covers the other tokens, and targets in
-settings.php.
+To check it, edit a node, change something and press Preview. The Frontend
+tab shows the change.
+
+[Consumer Node Preview's
+README](https://www.drupal.org/project/consumer_node_preview) lists the other
+URL tokens, and how to set targets in `settings.php`.
+
+## How it works
+
+1. The editor presses Preview in Drupal. The Frontend tab opens this module's
+   page in a frame.
+2. The page reads the preview's JSON:API address from the part of its URL
+   after the `#`. Browsers do not send that part to the frontend's server.
+3. The page fetches the preview with the editor's Drupal session. It puts the
+   document in the Druxt store.
+4. `DruxtEntity` renders the node from the store, inside a `DruxtNodePreview`
+   wrapper. The unsaved content goes through the same components as the live
+   site.
 
 ## Preview layouts
 
-The page uses the layout that `?layout=` names, if `layouts` lists it.
-Otherwise it uses the default layout, so a preview URL cannot put the page in
-another of the site's layouts. Each listed layout must be a file in the site's
-`layouts/` that renders `<Nuxt />`. A bare layout, with the site's type and
-spacing but no header or footer, suits a preview of content that sits inside
-other pages. `$druxtNodePreview.layout(name)` makes the same check, for a site
-that picks layouts elsewhere.
+The page uses the layout that `?layout=` names, but only if `layouts` lists
+it. If not, the page uses the default layout. A preview URL cannot pick any
+other layout.
+
+Each listed layout must be a file in the site's `layouts/` folder that renders
+`<Nuxt />`. A bare layout suits content that sits inside other pages. It has
+the site's type and spacing, but no header or footer.
+
+A site that picks layouts somewhere else can call
+`$druxtNodePreview.layout(name)`. It makes the same check.
 
 ## Theming the preview
 
 A live page often adds a title or a container around the node. The preview
-gets the same through a wrapper component, picked like any Druxt wrapper. For
-a `node--doc_page` previewed in `full`, the first of these that exists is
-used:
+gets the same from a wrapper component, picked like any Druxt wrapper. For a
+`node--doc_page` previewed in `full`, the page uses the first of these that
+exists:
 
 1. `DruxtNodePreviewDocPageFull`
 2. `DruxtNodePreviewDocPage`
@@ -169,7 +184,7 @@ used:
 
 If none of them exists, the node renders in Druxt's plain wrapper.
 
-A wrapper receives whichever of these props it declares:
+A wrapper gets any of these props that it declares:
 
 - `document`: the whole JSON:API preview document.
 - `entity`: the previewed resource, with `attributes` such as the title.
@@ -197,111 +212,106 @@ export default {
 </script>
 ```
 
-A wrapper named by bundle alone, such as `DruxtNodePreviewDocPage`, applies
-to every view mode. So page chrome such as a title belongs in the
-`<Bundle>Full` wrapper, as above, or behind the `mode` prop.
+A wrapper named by bundle alone, such as `DruxtNodePreviewDocPage`, applies to
+every view mode. Put page parts such as a title in the `<Bundle>Full` wrapper,
+as above, or check the `mode` prop.
 
 ## Components that fetch their own data
 
-The preview seeds the store, so a component that reads the store renders the
-unsaved data. A component that fetches its data again, such as paragraphs
-at a revision, would replace the preview with saved content. The plugin
-registers a `druxtNodePreview` store module for this. Skip the refetch while a
-preview is active:
+A component that reads the Druxt store shows the unsaved data. A component
+that fetches its data again, such as paragraphs at a revision, shows the saved
+content instead. Skip that fetch while a preview is active:
 
 ```js
 if ((this.$store.state.druxtNodePreview || {}).active) return
 ```
 
-When the editor leaves the preview, the plugin removes the resources it
-seeded from the Druxt store and clears the flag, before the next page loads.
-That page then fetches the saved content.
+When the editor leaves the preview, the module removes the preview data from
+the store. The next page loads the saved content.
 
-The resources go under the route's `langcode` meta, which is where
-`DruxtEntity` reads them when it has no `langcode` prop.
+The module stores the data under the route's `langcode` meta. `DruxtEntity`
+reads it there when it has no `langcode` prop.
 
-## The request
+## The preview request
 
 The page fetches through the Druxt client, `$druxt.axios`, with credentials.
 The site's request interceptors apply, such as one that adds a workspace
-header, and the editor's session cookie goes with the request. Without the
-Druxt client, the page uses `window.fetch`.
+header. Without the Druxt client, the page uses `window.fetch`.
 
-An endpoint given as a path stays a path. The Druxt client resolves it against
-its own base URL, and interceptors that decide by path still match it. That
-suits a frontend that serves Drupal through a proxy on its own origin. The
-editor must then sign in through that proxy too, because the session cookie
-belongs to the host the editor signed in on. Druxt's `proxy: { api: true }`
-forwards the API but not Drupal's sign-in pages, so it is not enough on its
-own.
+A preview address that is a path stays a path. The Druxt client resolves it
+against its own base URL, and interceptors that match by path still match it.
+This suits a frontend that reaches Drupal through a proxy on its own origin.
+The editor must then sign in through that proxy too, because the session
+cookie belongs to the host the editor signed in on. Druxt's
+`proxy: { api: true }` forwards the API but not Drupal's sign-in pages, so it
+is not enough on its own.
 
-Without a proxy, the Druxt client sends a path to Drupal's origin, as it does
-an absolute endpoint. Then Drupal needs CORS with `supportsCredentials: true`
-for the frontend origin. Drupal's session cookie is `SameSite=Lax`, so the
-frontend and Drupal must share a site, such as `www.example.com` and
-`cms.example.com`.
+Without a proxy, the request goes to Drupal's origin. Drupal then needs the
+CORS settings from [Drupal setup](#drupal-setup). The session cookie is
+`SameSite=Lax`, so the frontend and Drupal need one parent domain.
 
-The page fetches only a node preview, from an endpoint whose path ends in
-`/{uuid}/preview`. It checks that the response is `application/vnd.api+json`,
-and that each resource in it has a JSON:API type and a UUID. Anything else
-shows an error and reaches nothing in the store.
+The page only fetches a node preview, from an address that ends in
+`/{uuid}/preview`. The response must be `application/vnd.api+json`, and each
+resource in it must have a JSON:API type and a UUID. If a check fails, the
+page shows an error and puts nothing in the store.
 
-## Server rendering
+## Server rendering and static sites
 
 The page only works in the browser. A server render shows "Loading
-preview..." and the browser fills it in. On a statically generated site, the
-page sets the listed layout once it is in the browser, because the generated
-page has the default one.
+preview..." and the browser fills it in. A statically generated page has the
+default layout, so the page switches to the listed layout in the browser.
 
 ## Troubleshooting
 
 The page shows "Preview unavailable" and a message.
 
-- **HTTP 404.** Drupal has no preview of this node for the editor. The
-  editor may not have pressed Preview, or may not have access to the node.
-  Otherwise, the editor's session cookie did not reach Drupal. The frontend
-  and Drupal must share a site. Use one host name for each: on localhost,
-  `localhost` and `127.0.0.1` are different sites. Check the CORS settings
-  too.
-- **"The preview endpoint is not on this site or its Drupal site".** The
-  endpoint's origin is not the frontend's, `druxt.baseUrl`'s or one in
-  `origins`. Add it to `origins`.
-- **"No preview endpoint was provided in the URL fragment".** The target URL
-  has no `#[jsonapi_node_preview]`.
+- **HTTP 404.** Drupal has no preview of this node for the editor. Check, in
+  this order:
+  1. The editor pressed Preview, and can view the node.
+  2. The frontend and Drupal share a parent domain. On your own computer,
+     use one host name for both: `localhost` and `127.0.0.1` count as
+     different.
+  3. The CORS settings in `services.yml` name the frontend's origin.
+- **"The preview endpoint is not on this site or its Drupal site".** Add the
+  preview's origin to the `origins` option.
+- **"No preview endpoint was provided in the URL fragment".** The preview
+  target's URL template has no `#[jsonapi_node_preview]` at the end.
 - **HTTP 400.** An `include` path that the previewed type does not have. Key
   that path by type.
 
-A missing schema from `DruxtEntity` usually means the bundle has no view
-display for the previewed view mode. Create the display. Drupal can also have
-been unreachable when Nuxt built the schema, or `.nuxt` can hold an old one.
-Restart the frontend after Drupal is up. `test/e2e/TROUBLESHOOTING.md` covers
-the end to end stack.
+If `DruxtEntity` reports a missing schema:
+
+1. Check that the content type has a display for the previewed view mode, on
+   its **Manage display** tab.
+2. Make sure Drupal is up, then restart the frontend. Nuxt builds the schema
+   when it starts, and `.nuxt` can hold an old one.
+
+The [end to end troubleshooting
+notes](https://github.com/druxt-contrib/druxt-node-preview/blob/0.x/test/e2e/TROUBLESHOOTING.md)
+cover the test stack.
 
 ## Writing another frontend
 
-Consumer Node Preview's README shows how a frontend reads the document URL
-from the fragment, including the `https:/` repair that some routers need.
-Any link can set the fragment, so a frontend checks these before it renders
-anything:
-
-- the endpoint's origin, against its own and Drupal's;
-- that the endpoint is a node preview, ending in `/{uuid}/preview`;
-- that the response is JSON:API, and that each resource has a JSON:API type
-  and a UUID.
+[Consumer Node Preview's
+README](https://www.drupal.org/project/consumer_node_preview) shows how a
+frontend reads the preview address from the URL, including the `https:/`
+repair that some routers need. Before it renders anything, a frontend makes
+the same checks as this module. See [The preview request](#the-preview-request).
 
 This module reads `[view_mode]` and `[layout]` from the `vm` and `layout`
-query parameters. They change only the presentation. The JSON:API document is
-the same for each.
+query parameters. They change only how the preview looks. The JSON:API
+document is the same for each.
 
 ## Vendoring
 
-The package contains its built `dist`. A site that vendors a copy instead of
-installing it must commit `dist` too, even when the site ignores `dist`
-folders.
+The package contains its built `dist` folder. A site that commits a copy
+instead of installing it must commit `dist` too, even when the site ignores
+`dist` folders.
 
 ## Example
 
-See `example/` for a paired Drupal and Nuxt setup.
+See the [example](https://github.com/druxt-contrib/druxt-node-preview/tree/0.x/example)
+for a paired Drupal and Nuxt setup.
 
 ## Licence
 
