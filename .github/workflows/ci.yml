@@ -45,8 +45,11 @@ jobs:
       # Pack as npm publish does, and check the tarball holds what Nuxt loads.
       - run: |
           npm pack
+          # List the tarball once. A grep -q that exits early in a pipe can kill
+          # tar with SIGPIPE, and pipefail then fails the check at random.
+          tar -tzf druxt-contrib-node-preview-*.tgz > package-files.txt
           for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue templates/DruxtNodePreview.vue; do
-            tar -tzf druxt-contrib-node-preview-*.tgz | grep -qx "package/$f" || { echo "The package is missing $f"; exit 1; }
+            grep -qx "package/$f" package-files.txt || { echo "The package is missing $f"; exit 1; }
           done
       - uses: actions/upload-artifact@v4
         with:
