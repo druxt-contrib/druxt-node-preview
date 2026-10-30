@@ -260,7 +260,7 @@ test:e2e:
     # deasync builds a native module during npm ci, so the image needs make
     # and a compiler.
     - section_start "toolchain" "Installing PHP, Composer and mise"
-    - apt-get update && apt-get install -y -q build-essential curl php-cli php-sqlite3 php-gd php-xml php-mbstring php-curl composer
+    - apt-get update && apt-get install -y -q build-essential curl php-cli php-sqlite3 php-gd php-xml php-mbstring php-curl composer openssl
     # The Druxt tier runs its Nuxt frontend on Node 16 through mise, beside
     # the newer Node that Playwright needs.
     - curl -fsSL https://mise.run | sh

@@ -1,4 +1,14 @@
 import NuxtModule from '../src/index.js'
+import { DruxtClient } from 'druxt'
+import { routeDruxtClient } from './helpers/druxt-client.js'
+
+jest.mock('druxt', () => ({
+  ...jest.requireActual('druxt'),
+  DruxtClient: jest.fn(),
+}))
+
+// Answers each request the module sends through its DruxtClient.
+const request = jest.fn()
 
 const buildContext = (druxtOptions = {}) => {
   const context = {
@@ -163,6 +173,21 @@ describe('DruxtNodePreview module', () => {
     warn.mockRestore()
   })
 
+  test('an include option that is not a list is reported, not dropped quietly', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({
+      nodePreview: { include: { 'node--page': 'field_media' } },
+    })
+    NuxtModule.call(context)
+    expect(context.addedPlugins[0].options.include).toEqual({
+      'node--page': [],
+    })
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Ignored the include option for node--page')
+    )
+    warn.mockRestore()
+  })
+
   test('a layout name that is not plain is reported, not dropped quietly', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     const context = buildContext({
@@ -172,5 +197,158 @@ describe('DruxtNodePreview module', () => {
     expect(context.addedPlugins[0].options.layouts).toEqual(['preview'])
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"docs/bare"'))
     warn.mockRestore()
+  })
+
+  describe('preview target registration', () => {
+    const KEY = Symbol.for('druxt-node-preview.register')
+    const ENV = [
+      'DRUXT_NODE_PREVIEW_CLIENT_SECRET',
+      'DRUXT_NODE_PREVIEW_CLIENT_ID',
+      'DRUXT_NODE_PREVIEW_URL',
+    ]
+    let saved
+    let info
+    beforeEach(() => {
+      saved = Object.fromEntries(ENV.map((name) => [name, process.env[name]]))
+      for (const name of ENV) delete process.env[name]
+      delete process[KEY]
+      request.mockReset()
+      DruxtClient.mockReset()
+      routeDruxtClient(DruxtClient, request)
+      info = jest.spyOn(console, 'info').mockImplementation(() => {})
+    })
+    afterEach(() => {
+      for (const name of ENV) {
+        if (saved[name] === undefined) delete process.env[name]
+        else process.env[name] = saved[name]
+      }
+      delete process[KEY]
+      info.mockRestore()
+    })
+
+    test('is off by default', () => {
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_ID = 'frontend'
+      process.env.DRUXT_NODE_PREVIEW_URL = 'https://www.example.com'
+      const context = buildContext({ baseUrl: 'https://cms.example.com' })
+      NuxtModule.call(context)
+      expect(context.hooks.ready).toBeUndefined()
+      expect(request).not.toHaveBeenCalled()
+    })
+
+    test('registers on ready, with the baseUrl, path and layouts known then', async () => {
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
+      const context = buildContext({
+        nodePreview: {
+          path: '/preview',
+          layouts: ['default', 'preview'],
+          register: {
+            url: 'https://www.example.com',
+            consumer: 'frontend',
+            label: 'Production',
+          },
+        },
+      })
+      NuxtModule.call(context)
+      expect(request).not.toHaveBeenCalled()
+
+      // druxt-site sets the baseUrl after this module runs.
+      context.options.druxt.baseUrl = 'https://cms.example.com'
+      request
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify({ access_token: 't' }),
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify({ targets: [], layouts: [] }),
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify({ targets: [], layouts: [] }),
+        })
+      await context.hooks.ready()
+
+      expect(request.mock.calls.map(([method, url]) => [method, url])).toEqual([
+        ['POST', 'https://cms.example.com/oauth/token'],
+        ['GET', 'https://cms.example.com/api/consumer-node-preview/targets'],
+        ['PUT', 'https://cms.example.com/api/consumer-node-preview/targets'],
+      ])
+      expect(JSON.parse(request.mock.calls[2][2].body)).toEqual({
+        targets: [
+          {
+            label: 'Production',
+            url: 'https://www.example.com/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]',
+          },
+        ],
+        layouts: ['default', 'preview'],
+      })
+    })
+
+    test('registers once per process, even when Nuxt runs the module again', async () => {
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_ID = 'frontend'
+      process.env.DRUXT_NODE_PREVIEW_URL = 'https://www.example.com'
+      request
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify({ access_token: 't' }),
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          text: JSON.stringify({
+            targets: [
+              {
+                label: 'www.example.com',
+                url: 'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path]',
+              },
+            ],
+          }),
+        })
+      for (let run = 0; run < 2; run++) {
+        const context = buildContext({
+          baseUrl: 'https://cms.example.com',
+          nodePreview: { register: true },
+        })
+        NuxtModule.call(context)
+        await context.hooks.ready()
+      }
+      expect(request).toHaveBeenCalledTimes(2)
+    })
+
+    test('a registration that fails does not fail the hook', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
+      const context = buildContext({
+        baseUrl: 'https://cms.example.com',
+        nodePreview: {
+          register: { url: 'https://www.example.com', consumer: 'frontend' },
+        },
+      })
+      NuxtModule.call(context)
+      request.mockRejectedValueOnce(
+        Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })
+      )
+      await expect(context.hooks.ready()).resolves.toBe('failed')
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not register the preview target')
+      )
+      warn.mockRestore()
+    })
+
+    test('an unusable register option warns and adds no hook', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const context = buildContext({
+        nodePreview: {
+          register: { url: 'https://www.example.com', consumer: 'frontend' },
+        },
+      })
+      NuxtModule.call(context)
+      expect(context.hooks.ready).toBeUndefined()
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('DRUXT_NODE_PREVIEW_CLIENT_SECRET is not set')
+      )
+      warn.mockRestore()
+    })
   })
 })
