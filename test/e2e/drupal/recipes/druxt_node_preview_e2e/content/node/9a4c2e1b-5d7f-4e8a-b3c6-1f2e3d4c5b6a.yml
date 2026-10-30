@@ -1,0 +1,44 @@
+_meta:
+  version: '1.0'
+  entity_type: node
+  uuid: 9a4c2e1b-5d7f-4e8a-b3c6-1f2e3d4c5b6a
+  bundle: e2e_article
+  default_langcode: en
+default:
+  status:
+    -
+      value: true
+  uid:
+    -
+      target_id: 1
+  title:
+    -
+      value: 'E2E Preview test'
+  # Core's exporter does not follow paragraph references, so the paragraphs
+  # are written inline. The importer creates them, and saving the article
+  # sets each one's parent.
+  field_body:
+    -
+      entity:
+        _meta:
+          version: '1.0'
+          entity_type: paragraph
+          uuid: 9a4c2e1b-5d7f-4e8a-b3c6-1f2e3d4c5b01
+          bundle: text
+          default_langcode: en
+        default:
+          field_text:
+            -
+              value: 'Alpha (saved)'
+    -
+      entity:
+        _meta:
+          version: '1.0'
+          entity_type: paragraph
+          uuid: 9a4c2e1b-5d7f-4e8a-b3c6-1f2e3d4c5b02
+          bundle: text
+          default_langcode: en
+        default:
+          field_text:
+            -
+              value: 'Beta (saved)'
