@@ -96,6 +96,7 @@
     "access": "public"
   },
   "jest-junit": {
+    "outputDirectory": "reports/junit",
     "outputName": "junit.xml"
   }
 }

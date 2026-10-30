@@ -1,0 +1,48 @@
+---
+# CodeQL code scanning for the module's JavaScript. It runs on the same
+# triggers as ci.yml, and once a week, so a new query finds old code too.
+name: 'CodeQL'
+
+on:
+  push:
+    branches: ['*.x']
+  # No branch filter on pull_request, as in ci.yml, so a stacked pull request
+  # is scanned too.
+  pull_request:
+  schedule:
+    - cron: '15 5 * * 2'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+        with:
+          languages: ${{ matrix.language }}
+
+      # JavaScript needs no build, so Autobuild has nothing to compile.
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@4187e74d05793876e9989daffde9c3e66b4acd07  # v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07  # v3

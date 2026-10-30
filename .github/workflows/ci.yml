@@ -1,9 +1,9 @@
-# Druxt contrib standard CI. Reference implementation.
-#
-# GitHub Actions is the canonical CI for Druxt npm modules; a private GitLab runs
-# an additive private pipeline (.gitlab-ci.yml). Publish to npm only from a
-# commit green on both. This file follows druxt core's modernized ci.yml.
+---
 name: ci
+
+# The same lint and test set as .gitlab-ci.yml. This repository is mirrored
+# and releases are cut here, so both hosts have to agree. Nothing on this side
+# lints this file: the GitLab pipeline runs actionlint over it in return.
 
 on:
   push:
@@ -11,10 +11,10 @@ on:
     # both shapes: * matches dots. Releases are tags, so there is no
     # release branch to list here.
     branches: ['*.x']
+  # No branch filter on pull_request, on purpose. The filter matches the pull
+  # request's base, so a stacked pull request based on a feature branch would
+  # run no jobs at all, and show no checks rather than failing ones.
   pull_request:
-    # No branch filter on purpose. The filter matches the pull request's
-    # base, so a stacked pull request based on a feature branch would run
-    # no jobs at all, and show no checks rather than failing ones.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,20 +23,23 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  NODE_VERSION: 16.20.1
-
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to commit SHAs, not tags. A tag is a mutable
+      # reference to code that runs with this repository's credentials.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
+      # corepack reads the packageManager field, so the manager the lockfile
+      # was written by is the one that installs it, and this file never names
+      # one.
+      - run: corepack enable && corepack prepare --activate
       - run: npm ci
       - run: npm run build
       # The package must hold what Nuxt loads, and the CommonJS build must
@@ -51,54 +54,96 @@ jobs:
           for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue templates/DruxtNodePreview.vue; do
             grep -qx "package/$f" package-files.txt || { echo "The package is missing $f"; exit 1; }
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: dist
           path: dist
 
   lint:
     runs-on: ubuntu-24.04
-    needs: build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+          # The attribution and prose checks read the pull request's own
+          # commits, so its base has to be present.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
+      - run: corepack enable && corepack prepare --activate
       - run: npm ci
-      - run: npm run lint
+      - run: npm run lint:js
+      - run: npm run lint:format
+      - run: npm run lint:md
+      - run: npm run lint:cspell
+      - run: npm run lint:knip
+      # This repository is public, and its README and example are what people
+      # copy. A host only the author can reach must never reach a tracked file.
+      - run: npm run lint:private
+      # The work is the author's. No commit, pull request description or
+      # tracked file may credit an AI tool as author, co-author or generator.
+      - name: Check for AI attribution
+        env:
+          ATTRIBUTION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          MERGE_REQUEST_DESCRIPTION: ${{ github.event.pull_request.body }}
+        run: bash .gitlab/scripts/check-attribution.sh
+      # Project voice over the markdown a change touches, its commit messages
+      # and the pull request description.
+      - name: Lint prose
+        env:
+          PROSE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          MERGE_REQUEST_DESCRIPTION: ${{ github.event.pull_request.body }}
+          PROSE_LINT_GLOB: "!{.changeset,example/drupal}/**"
+        run: |
+          bash .gitlab/scripts/install-vale.sh .vale/bin .vale/styles
+          bash .gitlab/scripts/lint-prose.sh
 
+  # Production only. A shipped runtime dependency is what actually reaches a
+  # consumer. The full audit is printed for information and does not block.
   audit:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           persist-credentials: false
-      # Full audit reports only. The production audit blocks.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version-file: .nvmrc
       - run: npm audit || true
-      - run: npm audit --omit=dev
+      - run: npm run lint:audit
 
   unit:
     runs-on: ubuntu-24.04
     needs: build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: npm
+      - run: corepack enable && corepack prepare --activate
       - run: npm ci
-      - run: npx jest --runInBand --reporters=default --reporters=jest-junit
-      - uses: actions/upload-artifact@v4
+      # The coverage floor in jest.config.js is what fails here. Codecov below
+      # adds the per-pull-request view on top and is not the gate.
+      - run: npm test -- --reporters=default --reporters=jest-junit --runInBand
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
           name: junit-unit
-          path: junit.xml
+          path: reports/junit/
           if-no-files-found: ignore
+      - name: Upload coverage to Codecov
+        if: ${{ env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238  # v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
 
   e2e:
     # The e2e stack needs PHP and composer for the Drupal side, and a newer
@@ -107,22 +152,24 @@ jobs:
     runs-on: ubuntu-24.04
     needs: build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      # The Druxt tier runs its Nuxt frontend on Node 16 through mise, beside
+      # the newer Node that Playwright needs. mise goes first: it puts its
+      # shims on PATH, and a node shim there would resolve to the Node 16 that
+      # .mise.toml pins. setup-node below puts Node 20 ahead of the shims.
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac  # v2
+        with:
+          install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: 20
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240  # v2
         with:
           php-version: '8.3'
           extensions: gd, pdo_sqlite
           tools: composer
-      # The Druxt tier runs its Nuxt frontend on Node 16 through mise, beside
-      # the newer Node that Playwright needs.
-      - uses: jdx/mise-action@v2
-        with:
-          install: false
       - run: mise install node@16.20.1
       - run: npm ci
       - run: npx playwright install --with-deps chromium
@@ -132,7 +179,7 @@ jobs:
           # The Druxt tier runs on every pull request. Set the E2E_DRUXT
           # repository variable to 0 to leave it out.
           E2E_DRUXT: ${{ vars.E2E_DRUXT || '1' }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: failure()
         with:
           name: e2e-artifacts
