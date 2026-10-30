@@ -4,10 +4,10 @@ const path = require('path')
 // The template placeholder is replaced by Nuxt at build time. Replace it the
 // same way here, so the plugin source stays testable as-is. The only module
 // syntax in the plugin is its default export.
-const loadPlugin = () => {
+const loadPlugin = (include = ['field_body']) => {
   const source = fs
     .readFileSync(path.resolve(__dirname, '../templates/plugin.js'), 'utf8')
-    .replace("'<%= JSON.stringify(options.include) %>'", '\'["field_body"]\'')
+    .replace("'<%= JSON.stringify(options.include) %>'", "'" + JSON.stringify(include) + "'")
     .replace("'<%= JSON.stringify(options.origins) %>'", '\'["https://example.com"]\'')
     .replace('export default', 'module.exports.default =')
   const mod = { exports: {} }
@@ -32,7 +32,7 @@ const jsonApi = (doc, type = 'application/vnd.api+json') => ({
   json: async () => doc,
 })
 
-const buildPlugin = (app = {}) => {
+const buildPlugin = (app = {}, include = undefined) => {
   const commits = []
   const modules = {}
   const store = {
@@ -42,7 +42,7 @@ const buildPlugin = (app = {}) => {
     registerModule: (name, module) => { modules[name] = module },
   }
   let injected
-  loadPlugin().default({ app, store }, (name, value) => { injected = { name, value } })
+  loadPlugin(include).default({ app, store }, (name, value) => { injected = { name, value } })
   return { commits, injected, modules }
 }
 
@@ -67,6 +67,8 @@ describe('$druxtNodePreview plugin', () => {
     expect(state).toEqual({ active: false, uuid: null })
     modules.druxtNodePreview.mutations.start(state, 'abc')
     expect(state).toEqual({ active: true, uuid: 'abc' })
+    modules.druxtNodePreview.mutations.stop(state)
+    expect(state).toEqual({ active: false, uuid: null })
   })
 
   test('fetch goes through the Druxt client with credentials', async () => {
@@ -74,10 +76,10 @@ describe('$druxtNodePreview plugin', () => {
     const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
 
-    const result = await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    const result = await injected.value.fetch(ENDPOINT)
 
     expect(get).toHaveBeenCalledWith(
-      window.location.origin + `/jsonapi/node/article/${UUID}/preview?include=field_body`,
+      `${ENDPOINT}?include=field_body`,
       expect.objectContaining({ withCredentials: true }),
     )
     expect(result).toBe(doc)
@@ -90,11 +92,30 @@ describe('$druxtNodePreview plugin', () => {
     expect(get).not.toHaveBeenCalled()
   })
 
-  test('fetch keeps an include the endpoint already has', async () => {
+  // A site's request interceptors often decide by path, for example to add
+  // a workspace header to its own API requests. An absolute URL on the
+  // frontend's origin would slip past them.
+  test('fetch hands a path endpoint to the Druxt client as a path', async () => {
     const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }))
     const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    expect(get.mock.calls[0][0]).toBe(`/jsonapi/node/article/${UUID}/preview?include=field_body`)
+  })
+
+  test('fetch merges the configured include into the endpoint\'s include', async () => {
+    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--article', id: UUID } }))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    const path = `/jsonapi/node/article/${UUID}/preview`
+
     await injected.value.fetch(`${ENDPOINT}?include=field_content`)
-    expect(get.mock.calls[0][0]).toBe(`${ENDPOINT}?include=field_content`)
+    await injected.value.fetch(`${ENDPOINT}?include=field_body,field_content`)
+    await injected.value.fetch(`${path}?resourceVersion=rel%3Alatest-version&include=field_content`)
+
+    expect(get.mock.calls.map((call) => call[0])).toEqual([
+      `${ENDPOINT}?include=field_content,field_body`,
+      `${ENDPOINT}?include=field_body,field_content`,
+      `${path}?resourceVersion=rel%3Alatest-version&include=field_content,field_body`,
+    ])
   })
 
   test('fetch through the client refuses a response that is not JSON:API', async () => {
@@ -148,6 +169,13 @@ describe('$druxtNodePreview plugin', () => {
     window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
     await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
     expect(window.fetch).toHaveBeenCalled()
+  })
+
+  test('fetch without the Druxt client keeps a path endpoint relative', async () => {
+    const { injected } = buildPlugin()
+    window.fetch = jest.fn().mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
+    await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    expect(window.fetch.mock.calls[0][0]).toBe(`/jsonapi/node/article/${UUID}/preview?include=field_body`)
   })
 
   test('fetch throws on a failed response', async () => {
@@ -215,5 +243,118 @@ describe('$druxtNodePreview plugin', () => {
       expect(() => injected.value.seed(doc)).toThrow('not a node preview document')
     }
     expect(commits).toHaveLength(0)
+  })
+
+  // DruxtEntity reads a resource under its language: its langcode prop, else
+  // the route's langcode meta. The preview's DruxtEntity has no langcode prop.
+  test('seed stores under the route\'s language, where DruxtEntity reads', () => {
+    const router = { beforeEach: () => {}, currentRoute: { name: 'druxt-node-preview', meta: { langcode: 'es' } } }
+    const { injected, commits } = buildPlugin({ router })
+    injected.value.seed({ data: { type: 'node--article', id: UUID } })
+    expect(commits[0].payload.prefix).toBe('es')
+  })
+
+  describe('leaving the preview route', () => {
+    let guard
+    let preview
+
+    beforeEach(() => {
+      const router = { currentRoute: { name: 'druxt-node-preview' }, beforeEach: (fn) => { guard = fn } }
+      preview = buildPlugin({ router })
+      preview.injected.value.seed({
+        data: { type: 'node--article', id: UUID },
+        included: [{ type: 'paragraph--text', id: P1 }],
+      })
+      preview.commits.length = 0
+    })
+
+    // The preview seeded unsaved resources into the Druxt store. The next
+    // page must fetch the saved ones, and must not see the preview flag.
+    test('flushes what the preview seeded and clears the flag', () => {
+      const next = jest.fn()
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, next)
+
+      expect(preview.commits).toEqual([
+        { name: 'druxt/flushResource', payload: { type: 'node--article', id: UUID } },
+        { name: 'druxt/flushResource', payload: { type: 'paragraph--text', id: P1 } },
+        { name: 'druxtNodePreview/stop', payload: undefined },
+      ])
+      expect(next).toHaveBeenCalledWith()
+    })
+
+    test('flushes only once', () => {
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, jest.fn())
+      preview.commits.length = 0
+      guard({ name: 'index' }, { name: 'druxt-node-preview' }, jest.fn())
+      expect(preview.commits).toEqual([])
+    })
+
+    test('leaves other navigation alone', () => {
+      const next = jest.fn()
+      guard({ name: 'docs' }, { name: 'index' }, next)
+      guard({ name: 'druxt-node-preview' }, { name: 'druxt-node-preview' }, next)
+      expect(preview.commits).toEqual([])
+      expect(next.mock.calls).toEqual([[], []])
+    })
+  })
+
+  describe('a fetch that ends while the editor is leaving', () => {
+    let guard
+    let preview
+
+    // vue-router runs this guard before the next route's code loads, and
+    // changes currentRoute only after that. So a fetch that ends in between
+    // still sees the preview route.
+    beforeEach(() => {
+      const router = { currentRoute: { name: 'druxt-node-preview' }, beforeEach: (fn) => { guard = fn } }
+      preview = buildPlugin({ router })
+    })
+
+    test('seeds nothing', () => {
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, jest.fn())
+      expect(preview.injected.value.seed({ data: { type: 'node--article', id: UUID } })).toBeNull()
+      expect(preview.commits).toEqual([])
+    })
+
+    test('does not stop the next preview from seeding', () => {
+      guard({ name: 'docs' }, { name: 'druxt-node-preview' }, jest.fn())
+      guard({ name: 'druxt-node-preview' }, { name: 'docs' }, jest.fn())
+      expect(preview.injected.value.seed({ data: { type: 'node--article', id: UUID } })).toEqual({ type: 'node--article', id: UUID })
+    })
+  })
+
+  test('a per type include goes only on that type', async () => {
+    const uuid = '0f8e7d6c-5b4a-4c3d-9e2f-1a0b9c8d7e6f'
+    const get = jest.fn().mockResolvedValue(axiosJsonApi({ data: { type: 'node--page', id: uuid } }))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } }, { 'node--page': ['field_content.field_media'] })
+    await injected.value.fetch('/jsonapi/node/page/' + uuid + '/preview?include=field_content')
+    await injected.value.fetch('/jsonapi/node/article/' + uuid + '/preview?include=field_body')
+    expect(get.mock.calls[0][0]).toBe('/jsonapi/node/page/' + uuid + '/preview?include=field_content,field_content.field_media')
+    expect(get.mock.calls[1][0]).toBe('/jsonapi/node/article/' + uuid + '/preview?include=field_body')
+  })
+
+  test('a preview that resolves after leaving seeds nothing', () => {
+    const { injected, commits } = buildPlugin({ router: { currentRoute: { name: 'docs' }, beforeEach: () => {} } })
+    expect(injected.value.seed({ data: { type: 'node--page', id: UUID } })).toBe(null)
+    expect(commits).toHaveLength(0)
+  })
+
+  // nuxt-i18n adds a language suffix to route names.
+  describe('a preview route with a language suffix', () => {
+    test('seeds', () => {
+      const router = { currentRoute: { name: 'druxt-node-preview___en' }, beforeEach: () => {} }
+      const { injected } = buildPlugin({ router })
+      expect(injected.value.seed({ data: { type: 'node--article', id: UUID } })).toEqual({ type: 'node--article', id: UUID })
+    })
+
+    test('flushes when the editor leaves it', () => {
+      let guard
+      const router = { currentRoute: { name: 'druxt-node-preview___en' }, beforeEach: (fn) => { guard = fn } }
+      const { injected, commits } = buildPlugin({ router })
+      injected.value.seed({ data: { type: 'node--article', id: UUID } })
+      commits.length = 0
+      guard({ name: 'docs___en' }, { name: 'druxt-node-preview___en' }, jest.fn())
+      expect(commits.map((commit) => commit.name)).toEqual(['druxt/flushResource', 'druxtNodePreview/stop'])
+    })
   })
 })

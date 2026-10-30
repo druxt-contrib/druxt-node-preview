@@ -102,12 +102,17 @@ test.describe('static frontend', () => {
 test.describe('druxt frontend', () => {
   test.skip(!DRUXT, 'FRONTEND_DRUXT_URL is not set')
 
+  // nuxt dev renders each page on the server, and the Druxt layout first
+  // fetches its blocks and menus from Drupal. That takes five or six seconds,
+  // more than the default expect timeout, before the frame has any content.
+  const frameExpect = expect.configure({ timeout: 30000 })
+
   test('renders the unsaved paragraphs through DruxtEntity', async ({ page }) => {
     await editAndPreview(page)
     const frame = await pickFrontend(page, 'E2E Druxt', DRUXT)
 
     const root = frame.locator('.druxt-node-preview')
-    await expect(root).toHaveAttribute('data-entity-type', 'node--e2e_article')
+    await frameExpect(root).toHaveAttribute('data-entity-type', 'node--e2e_article')
     await expect(root).toContainText(EDITED)
     await expect(root).toContainText(ADDED)
   })
@@ -116,9 +121,10 @@ test.describe('druxt frontend', () => {
     await editAndPreview(page)
     await pickFrontend(page, 'E2E Druxt', DRUXT)
     await page.locator(VIEW_MODES).selectOption('teaser')
+    await expect(page).toHaveURL(/preview\/[0-9a-f-]+\/teaser/)
 
     const frame = page.frameLocator(FRAME)
-    await expect(frame.locator('.druxt-node-preview')).toHaveAttribute('data-view-mode', 'teaser')
+    await frameExpect(frame.locator('.druxt-node-preview')).toHaveAttribute('data-view-mode', 'teaser')
   })
 
 })

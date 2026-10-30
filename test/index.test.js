@@ -103,4 +103,14 @@ describe('DruxtNodePreview module', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Ignored the origins option'))
     warn.mockRestore()
   })
+
+  test('an include value that is not plain is reported, not dropped quietly', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({ nodePreview: { include: { 'node--page': ['field_media', 'bad path'], page: ['field_x'] } } })
+    NuxtModule.call(context)
+    expect(context.addedPlugins[0].options.include).toEqual({ 'node--page': ['field_media'] })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"bad path"'))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"page"'))
+    warn.mockRestore()
+  })
 })
