@@ -302,12 +302,6 @@ This module reads `[view_mode]` and `[layout]` from the `vm` and `layout`
 query parameters. They change only how the preview looks. The JSON:API
 document is the same for each.
 
-## Vendoring
-
-The package contains its built `dist` folder. A site that commits a copy
-instead of installing it must commit `dist` too, even when the site ignores
-`dist` folders.
-
 ## Example
 
 See the [example](https://github.com/druxt-contrib/druxt-node-preview/tree/0.x/example)
