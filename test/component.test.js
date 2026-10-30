@@ -12,7 +12,10 @@ describe('DruxtNodePreview component', () => {
   })
 
   test('wrapper options follow the bundle and view mode', () => {
-    const options = DruxtNodePreview.druxt.componentOptions({ bundle: 'doc_page', mode: 'full' })
+    const options = DruxtNodePreview.druxt.componentOptions({
+      bundle: 'doc_page',
+      mode: 'full',
+    })
     expect(options).toEqual([['doc_page', 'full'], ['default']])
   })
 
@@ -24,16 +27,32 @@ describe('DruxtNodePreview component', () => {
   })
 
   test('wrappers get the document, entity and route props', () => {
-    const props = DruxtNodePreview.druxt.propsData({ document, entity: document.data, mode: 'teaser' })
-    expect(props).toEqual({ document, entity: document.data, mode: 'teaser', type: 'node--doc_page', uuid: 'abc' })
+    const props = DruxtNodePreview.druxt.propsData({
+      document,
+      entity: document.data,
+      mode: 'teaser',
+    })
+    expect(props).toEqual({
+      document,
+      entity: document.data,
+      mode: 'teaser',
+      type: 'node--doc_page',
+      uuid: 'abc',
+    })
   })
 
   test('the default slot renders DruxtEntity for the node', () => {
     const h = jest.fn((tag, data) => ({ tag, data }))
-    const slots = DruxtNodePreview.druxt.slots.call({ entity: document.data, mode: 'full' }, h)
+    const slots = DruxtNodePreview.druxt.slots.call(
+      { entity: document.data, mode: 'full' },
+      h
+    )
     expect(slots.default()).toEqual({
       tag: 'DruxtEntity',
-      data: { key: 'abc', props: { mode: 'full', type: 'node--doc_page', uuid: 'abc' } },
+      data: {
+        key: 'abc',
+        props: { mode: 'full', type: 'node--doc_page', uuid: 'abc' },
+      },
     })
   })
 })

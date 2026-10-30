@@ -5,7 +5,8 @@ module.exports = {
   moduleFileExtensions: ['js', 'json', 'vue'],
   // The page imports the preview component by the name Nuxt gives it.
   moduleNameMapper: {
-    '^\\./druxt-node-preview\\.vue$': '<rootDir>/templates/DruxtNodePreview.vue',
+    '^\\./druxt-node-preview\\.vue$':
+      '<rootDir>/templates/DruxtNodePreview.vue',
   },
   modulePathIgnorePatterns: ['/example/', '/test/e2e/'],
   testEnvironment: 'jsdom',
@@ -13,8 +14,7 @@ module.exports = {
   transform: {
     '^.+\\.(js)$': 'esbuild-jest',
     '^.+\\.(mjs)$': 'esbuild-jest',
-    '^.+\\.(vue)$': 'vue-jest'
+    '^.+\\.(vue)$': 'vue-jest',
   },
-  transformIgnorePatterns: ["/node_modules/(?!(druxt)/)"]
+  transformIgnorePatterns: ['/node_modules/(?!(druxt)/)'],
 }
-

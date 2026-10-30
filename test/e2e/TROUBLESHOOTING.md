@@ -31,7 +31,7 @@ run.sh applies each fix below. This file says why.
   jsonapi_views, which requires jsonapi_resources, and the decorator does not
   pass on jsonapi_node_preview's preview argument. Previews then served saved
   data and dropped paragraphs that were never saved. The include resolver
-  fixes from https://www.drupal.org/i/3367724, which the example applies, take
+  fixes from <https://www.drupal.org/i/3367724>, which the example applies, take
   the preview flag from the route, so the decorator cannot drop it.
 - **The standard profile's Article type breaks its own edit form** in this
   stack, with an image widget TypeError. The suite uses its own `e2e_article`

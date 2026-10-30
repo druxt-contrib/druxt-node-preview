@@ -1,0 +1,37 @@
+{
+  "$schema": "https://unpkg.com/knip@2/schema.json",
+  "entry": [
+    "src/index.js",
+    // Nuxt templates. src/index.js registers them by path through
+    // addTemplate and addPlugin, so nothing imports them.
+    "templates/*.{js,vue}",
+    "scripts/*.mjs",
+    "test/**/*.test.js",
+    "test/e2e/**/*.js",
+    "playwright.config.js"
+  ],
+  "project": [
+    "src/**/*.{js,vue}",
+    "templates/**/*.{js,vue}",
+    "scripts/**/*.mjs",
+    "test/**/*.js"
+  ],
+  "ignoreDependencies": [
+    // Invoked by name from .gitlab-ci.yml and .github/workflows, never
+    // imported. knip does not parse pipeline YAML.
+    "jest-junit",
+    // Registered by Jest through a transform name string in jest.config.js
+    // rather than imported.
+    "esbuild-jest",
+    "vue-jest",
+    // Peer of the Vue toolchain, resolved by vue-jest at runtime.
+    "vue-template-compiler",
+    // Imported from templates/DruxtNodePreview.vue. knip 2 reads no .vue
+    // file from a JSON configuration, so it cannot see the import.
+    "druxt",
+    // The development copy of a peer dependency. Nothing here imports it:
+    // DruxtNodePreview renders DruxtEntity by name, and the consuming site
+    // registers that component.
+    "druxt-entity"
+  ]
+}

@@ -1,0 +1,47 @@
+# Words this project uses that the standard dictionaries do not carry.
+# Add a term here rather than switching the check off for a file.
+autobuild
+Autobuild
+autocollapse
+automerge
+commitlint
+corepack
+cweagans
+DDEV
+druxt
+Druxt
+DRUXT
+frontends
+interruptible
+knip
+Ksection
+Lando
+langcode
+Licence
+lndo
+markdownlint
+mbstring
+normalises
+Nuxt
+nvmrc
+opencode
+refetches
+shivammathur
+siroc
+subform
+symfony
+tbachert
+
+# The prefix of Drupal's session cookie name.
+SESS
+
+# Fragments of percent-encoded URLs in test/plugin.test.js: %2F before
+# "article", "example" and so on, and %3A before "latest". They are test data,
+# not words, and cspell reads them as words.
+Alatest
+Fabc
+Farticle
+Fexample
+Fjsonapi
+Fnode
+Fpreview

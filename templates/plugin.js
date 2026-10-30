@@ -20,7 +20,8 @@ export default ({ app, store }, inject) => {
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-  const PREVIEW_PATH = /\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/preview$/
+  const PREVIEW_PATH =
+    /\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/preview$/
 
   /**
    * Returns the node's UUID from a preview endpoint, or throws.
@@ -37,7 +38,9 @@ export default ({ app, store }, inject) => {
   const checkEndpoint = (endpoint) => {
     const { origin, pathname } = new URL(endpoint, window.location.origin)
     if (origin !== window.location.origin && !origins.includes(origin)) {
-      throw new Error('The preview endpoint is not on this site or its Drupal site: ' + origin)
+      throw new Error(
+        'The preview endpoint is not on this site or its Drupal site: ' + origin
+      )
     }
     const match = pathname.match(PREVIEW_PATH)
     if (!match) {
@@ -68,13 +71,25 @@ export default ({ app, store }, inject) => {
    * @param {string} [uuid] - The UUID the main resource must have.
    */
   const checkDocument = (doc, uuid) => {
-    const safe = (key) => typeof key === 'string' && /^[A-Za-z0-9_-]+$/.test(key) && !(key in Object.prototype)
+    const safe = (key) =>
+      typeof key === 'string' &&
+      /^[A-Za-z0-9_-]+$/.test(key) &&
+      !(key in Object.prototype)
     const included = (doc || {}).included
-    const resources = doc && typeof doc === 'object' && doc.data && typeof doc.data === 'object'
-      && (included === undefined || Array.isArray(included))
-      ? [doc.data, ...(included || [])]
-      : []
-    if (!resources.length || !resources.every((resource) => resource && safe(resource.type) && UUID.test(resource.id))) {
+    const resources =
+      doc &&
+      typeof doc === 'object' &&
+      doc.data &&
+      typeof doc.data === 'object' &&
+      (included === undefined || Array.isArray(included))
+        ? [doc.data, ...(included || [])]
+        : []
+    if (
+      !resources.length ||
+      !resources.every(
+        (resource) => resource && safe(resource.type) && UUID.test(resource.id)
+      )
+    ) {
       throw new Error('The preview response is not a node preview document.')
     }
     if (uuid && doc.data.id !== uuid) {
@@ -92,26 +107,31 @@ export default ({ app, store }, inject) => {
    *
    * @returns {boolean} True for the preview route.
    */
-  const isPreview = (route) => /^druxt-node-preview(___[A-Za-z0-9_-]+)?$/.test((route || {}).name || '')
+  const isPreview = (route) =>
+    /^druxt-node-preview(___[A-Za-z0-9_-]+)?$/.test((route || {}).name || '')
 
   // The type and id of every resource the preview put in the Druxt store.
   const seeded = []
 
   if (!store.hasModule('druxtNodePreview')) {
-    store.registerModule('druxtNodePreview', {
-      namespaced: true,
-      state: () => ({ active: false, uuid: null }),
-      mutations: {
-        start(state, uuid) {
-          state.active = true
-          state.uuid = uuid
-        },
-        stop(state) {
-          state.active = false
-          state.uuid = null
+    store.registerModule(
+      'druxtNodePreview',
+      {
+        namespaced: true,
+        state: () => ({ active: false, uuid: null }),
+        mutations: {
+          start(state, uuid) {
+            state.active = true
+            state.uuid = uuid
+          },
+          stop(state) {
+            state.active = false
+            state.uuid = null
+          },
         },
       },
-    }, { preserveState: !!(store.state || {}).druxtNodePreview })
+      { preserveState: !!(store.state || {}).druxtNodePreview }
+    )
   }
 
   // True from when the editor leaves the preview route until a preview route
@@ -134,8 +154,7 @@ export default ({ app, store }, inject) => {
           }
           store.commit('druxtNodePreview/stop')
         }
-      }
-      else if (isPreview(to)) {
+      } else if (isPreview(to)) {
         left = false
       }
       next()
@@ -156,8 +175,13 @@ export default ({ app, store }, inject) => {
     const configured = includeFor(url)
     if (!configured.length) return url
     const [base, query = ''] = url.split('?')
-    const params = query.split('&').filter((param) => param && !param.startsWith('include='))
-    const current = (query.split('&').find((param) => param.startsWith('include=')) || 'include=')
+    const params = query
+      .split('&')
+      .filter((param) => param && !param.startsWith('include='))
+    const current = (
+      query.split('&').find((param) => param.startsWith('include=')) ||
+      'include='
+    )
       .slice('include='.length)
       .split(',')
       .filter(Boolean)
@@ -180,7 +204,9 @@ export default ({ app, store }, inject) => {
    */
   function includeFor(url) {
     if (Array.isArray(include)) return include
-    const match = url.split('?')[0].match(/\/([^/]+)\/([^/]+)\/[0-9a-f-]{36}\/preview$/)
+    const match = url
+      .split('?')[0]
+      .match(/\/([^/]+)\/([^/]+)\/[0-9a-f-]{36}\/preview$/)
     return (match && include[match[1] + '--' + match[2]]) || []
   }
 
@@ -193,9 +219,14 @@ export default ({ app, store }, inject) => {
    *
    * @returns {Error} The error.
    */
-  const failure = (url, status, body) => new Error(
-    'Preview request failed with HTTP ' + status + ' for ' + url + (body ? ': ' + String(body).slice(0, 300) : '')
-  )
+  const failure = (url, status, body) =>
+    new Error(
+      'Preview request failed with HTTP ' +
+        status +
+        ' for ' +
+        url +
+        (body ? ': ' + String(body).slice(0, 300) : '')
+    )
 
   const plugin = {
     /**
@@ -208,7 +239,8 @@ export default ({ app, store }, inject) => {
      *
      * @returns {string|undefined} The layout, or undefined for the default.
      */
-    layout: (name) => (typeof name === 'string' && layouts.includes(name) ? name : undefined),
+    layout: (name) =>
+      typeof name === 'string' && layouts.includes(name) ? name : undefined,
 
     /**
      * Returns the preview endpoint from the URL fragment.
@@ -247,20 +279,29 @@ export default ({ app, store }, inject) => {
         let response
         try {
           response = await client.get(url, { headers, withCredentials: true })
-        }
-        catch (error) {
+        } catch (error) {
           const failed = error.response || {}
           if (!failed.status) throw error
-          const body = typeof failed.data === 'string' ? failed.data : JSON.stringify(failed.data || '')
+          const body =
+            typeof failed.data === 'string'
+              ? failed.data
+              : JSON.stringify(failed.data || '')
           throw failure(url, failed.status, body)
         }
         checkType((response.headers || {})['content-type'])
         checkDocument(response.data, uuid)
         return response.data
       }
-      const response = await window.fetch(url, { credentials: 'include', headers })
+      const response = await window.fetch(url, {
+        credentials: 'include',
+        headers,
+      })
       if (!response.ok) {
-        throw failure(url, response.status, await response.text().catch(() => ''))
+        throw failure(
+          url,
+          response.status,
+          await response.text().catch(() => '')
+        )
       }
       checkType(response.headers && response.headers.get('content-type'))
       const doc = await response.json()
@@ -289,7 +330,8 @@ export default ({ app, store }, inject) => {
       // DruxtEntity reads a resource under its language: its langcode prop,
       // else the route's langcode meta. The preview's DruxtEntity has no
       // langcode prop, so the resources go under the route's.
-      const prefix = (((app.router || {}).currentRoute || {}).meta || {}).langcode
+      const prefix = (((app.router || {}).currentRoute || {}).meta || {})
+        .langcode
       for (const data of [doc.data, ...(doc.included || [])]) {
         store.commit('druxt/addResource', { prefix, resource: { data } })
         seeded.push({ type: data.type, id: data.id })
