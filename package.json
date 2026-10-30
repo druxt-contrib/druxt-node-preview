@@ -51,6 +51,7 @@
     "lint:prose": "PROSE_LINT_GLOB='!{.changeset,example/drupal}/**' bash .gitlab/scripts/lint-prose.sh --all",
     "lint:prose:install": "bash .gitlab/scripts/install-vale.sh .vale/bin .vale/styles",
     "prepack": "npm run build",
+    "release:version": "changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
     "test": "jest",
     "test:e2e": "playwright test",
     "test:e2e:stack": "test/e2e/run.sh",
