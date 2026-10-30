@@ -87,7 +87,8 @@ vendor/bin/drush site:install standard -y --db-url="$DB" --account-name=admin -q
 # site:install makes sites/default read-only, and services.yml goes there.
 chmod u+w web/sites/default
 cp "$ROOT/test/e2e/drupal/services.e2e.yml" web/sites/default/services.yml
-sed -i "s/localhost:3111/localhost:$FRONTEND_DRUXT_PORT/; s/localhost:3112/localhost:$FRONTEND_STATIC_PORT/" web/sites/default/services.yml
+# The placeholders are not ports, so one replacement cannot match the other.
+sed -i "s/:FRONTEND_DRUXT_PORT'/:$FRONTEND_DRUXT_PORT'/; s/:FRONTEND_STATIC_PORT'/:$FRONTEND_STATIC_PORT'/" web/sites/default/services.yml
 cp "$ROOT/test/e2e/drupal/settings.e2e.php" web/sites/default/settings.e2e.php
 chmod u+w web/sites/default/settings.php
 echo "include \$app_root . '/' . \$site_path . '/settings.e2e.php';" >> web/sites/default/settings.php
