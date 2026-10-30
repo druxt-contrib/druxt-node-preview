@@ -1,3 +1,10 @@
+<!-- vale off -->
+<!-- The alt text describes what the banner shows: the @druxt-contrib/node-preview mark, name and description. The name-colon-description form trips ColonUsage. -->
+<a href="https://druxtjs.org">
+  <img src=".github/banner.svg" alt="@druxt-contrib/node-preview: Node Preview module for Druxt">
+</a>
+<!-- vale on -->
+
 # @druxt-contrib/node-preview
 
 Renders Drupal node previews in a [Druxt](https://druxtjs.org) frontend. An
