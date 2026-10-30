@@ -88,6 +88,11 @@ jobs:
         run: |
           mkdir dev-package
           npm pack --pack-destination dev-package
+          # The tarball must hold what Nuxt loads, as the CI build job checks.
+          tar -tzf dev-package/*.tgz > dev-package-files.txt
+          for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue templates/DruxtNodePreview.vue; do
+            grep -qx "package/$f" dev-package-files.txt || { echo "The package is missing $f"; exit 1; }
+          done
           echo "Packed $(node -p "require('./package.json').version")" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -220,6 +225,11 @@ jobs:
         run: |
           mkdir release-package
           npm pack --pack-destination release-package
+          # The tarball must hold what Nuxt loads, as the CI build job checks.
+          tar -tzf release-package/*.tgz > release-package-files.txt
+          for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue templates/DruxtNodePreview.vue; do
+            grep -qx "package/$f" release-package-files.txt || { echo "The package is missing $f"; exit 1; }
+          done
           node -e "
             const text = require('fs').readFileSync('CHANGELOG.md', 'utf8')
             const start = text.indexOf('## ' + process.env.VERSION)
