@@ -59,9 +59,13 @@ description = "Run the end to end suite against a local Drupal and frontends (ne
 # frontend on Node 16 itself.
 run = "mise x node@20 -- npm run test:e2e:stack"
 
+[tasks."lint:prose"]
+description = "Install Vale if needed, then lint the prose"
+run = "npm run lint:prose:install && npm run lint:prose"
+
 [tasks.ci]
 description = "Everything the pipelines run, except the end to end suite"
-depends = ["lint", "test"]
+depends = ["lint", "lint:audit", "lint:prose", "build", "test"]
 
 # ---------------------------------------------------------------------------
 # Git hooks. Run once per clone. `npm install` does this for you via
