@@ -48,7 +48,7 @@
     "lint:knip": "knip --include dependencies,unlisted --no-config-hints",
     "lint:md": "markdownlint-cli2 \"**/*.md\"",
     "lint:private": "node scripts/lint-private-refs.mjs",
-    "lint:prose": "PROSE_LINT_GLOB='!{.changeset,example/drupal}/**' bash .gitlab/scripts/lint-prose.sh --all",
+    "lint:prose": "PROSE_LINT_GLOB='!{.changeset/**,example/drupal/**,CHANGELOG.md}' bash .gitlab/scripts/lint-prose.sh --all",
     "lint:prose:install": "bash .gitlab/scripts/install-vale.sh .vale/bin .vale/styles",
     "prepack": "npm run build",
     "release:version": "changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund",

@@ -90,12 +90,13 @@ jobs:
           MERGE_REQUEST_DESCRIPTION: ${{ github.event.pull_request.body }}
         run: bash .gitlab/scripts/check-attribution.sh
       # Project voice over the markdown a change touches, its commit messages
-      # and the pull request description.
+      # and the pull request description. The changesets action writes the
+      # version pull request's description, so that one is not linted.
       - name: Lint prose
         env:
           PROSE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          MERGE_REQUEST_DESCRIPTION: ${{ github.event.pull_request.body }}
-          PROSE_LINT_GLOB: "!{.changeset,example/drupal}/**"
+          MERGE_REQUEST_DESCRIPTION: ${{ !startsWith(github.head_ref, 'changeset-release/') && github.event.pull_request.body || '' }}
+          PROSE_LINT_GLOB: "!{.changeset/**,example/drupal/**,CHANGELOG.md}"
         run: |
           bash .gitlab/scripts/install-vale.sh .vale/bin .vale/styles
           bash .gitlab/scripts/lint-prose.sh
