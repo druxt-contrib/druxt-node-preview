@@ -111,11 +111,17 @@ module ignores it. The page's route name is `druxt-node-preview`.
    this URL template, with your frontend's host:
 
    ```text
-   https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]
+   https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]
    ```
 
    Drupal fills in the parts in square brackets when the editor presses
-   Preview. Keep them as they are.
+   Preview. Keep them as they are. `[jsonapi_node_preview_path]` gives the
+   preview's address as a path. The page fetches it through the Druxt
+   client, from `druxt.baseUrl` or through the site's proxy. The full URL,
+   `[jsonapi_node_preview]`, names the host the editor is on. On a site that
+   proxies JSON:API and has no CORS settings, that request is cross-origin,
+   and the browser blocks it. See [The preview
+   request](#the-preview-request).
 
    The frontend can add this target itself instead. See [Automatic
    registration](#automatic-registration).
@@ -179,7 +185,7 @@ DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' npm run start
 | Option     | Environment variable               | Default                                      | Description                                                                                                                               |
 | ---------- | ---------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `url`      | `DRUXT_NODE_PREVIEW_URL`           | None                                         | The frontend's public URL, such as `https://www.example.com`. Nuxt cannot know it from a build. Add the router base, if the site has one. |
-| `consumer` | `DRUXT_NODE_PREVIEW_CLIENT_ID`     | druxt-auth's client ID                       | The consumer's client ID. See [The client ID](#the-client-id).                                                                            |
+| `consumer` | `DRUXT_NODE_PREVIEW_CLIENT_ID`     | None                                         | The client ID of the consumer to register on. See [The consumer](#the-consumer).                                                          |
 | None       | `DRUXT_NODE_PREVIEW_CLIENT_SECRET` | None                                         | The consumer's secret. The module reads it only from the environment.                                                                     |
 | `label`    | None                               | The host of `url`, such as `www.example.com` | The target's name in Drupal's Frontend picker.                                                                                            |
 | `timeout`  | None                               | `5000`                                       | The longest time each request to Drupal can take, in milliseconds. It wins over a `timeout` in `druxt.axios`.                             |
@@ -189,21 +195,17 @@ config serves local, staging and production, and each host sets its own
 values. `register: true` takes all of them from the environment. Never put
 the secret in `nuxt.config.js`, and keep it out of the repository.
 
-### The client ID
+### The consumer
 
-The module uses the first client ID it finds, in this order:
+Use the frontend's confidential consumer, not a public sign-in consumer. One
+consumer can serve the frontend's settings, its preview targets and this
+registration. For registration, it needs a secret, the Client Credentials
+grant, and a Client Credentials user that owns it. See [Drupal setup for
+automatic registration](#drupal-setup-for-automatic-registration).
 
-1. `DRUXT_NODE_PREVIEW_CLIENT_ID`.
-2. The `consumer` option.
-3. `druxt.auth.clientId`, the client ID of
-   [druxt-auth](https://www.npmjs.com/package/druxt-auth).
-4. `DRUXT_AUTH_CLIENT_ID`, druxt-auth's environment variable.
-
-The module does not need druxt-auth. A site that has it can use one consumer
-for both, if that consumer is confidential and allows the Client
-Credentials grant. The module never reads druxt-auth's secret. The secret
-comes only from `DRUXT_NODE_PREVIEW_CLIENT_SECRET`. A client ID in
-druxt-auth's own module options, not in `druxt.auth`, is not used.
+Do not use the public consumer that people sign in with, such as the one
+for druxt-auth's password or authorization code flow. The client credentials
+grant does not work with a public consumer.
 
 ### What happens when Nuxt starts
 
@@ -213,15 +215,19 @@ When Nuxt is ready, in `nuxt dev`, `nuxt build`, `nuxt generate` and
 1. Gets a token from `/oauth/token` on `druxt.baseUrl`, with Simple OAuth's
    client credentials grant.
 2. Reads the consumer's targets from Consumer Node Preview's
-   `/api/consumer-node-preview/targets`.
+   `/api/consumer-node-preview/targets`. The `X-Consumer-ID` header names the
+   consumer by its client ID.
 3. Replaces the target that has the same label, or adds a new one. The other
    targets stay as they are.
 4. Writes the targets back. If nothing changed, it skips this step and says
    that the target is up to date.
 
 The target URL is the one from [Drupal setup](#drupal-setup): `url`, then
-the `path` option, then `?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]`.
-Without the `layouts` option, the URL has no `&layout=[layout]`.
+the `path` option, then
+`?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]`. Without the
+`layouts` option, the URL has no `&layout=[layout]`. The path token works
+because the target is on the Drupal site at `druxt.baseUrl`, the site the
+Druxt client fetches from.
 
 If the `layouts` option is set, the module also writes it as the consumer's
 Preview layouts. If not, Drupal keeps the consumer's layouts.
@@ -229,6 +235,12 @@ Preview layouts. If not, Drupal keeps the consumer's layouts.
 The module registers once for each Nuxt process. A failure never stops the
 build or the server. The module shows a warning and Nuxt carries on. The
 consumer keeps the targets it had.
+
+`nuxt build` and then `nuxt start` are two processes, so the module registers
+twice. The second run says that the target is up to date. The start alone is
+enough to register, so a build without the secret only shows a warning. On a
+host that builds when its container starts, the secret can be a runtime
+variable only.
 
 The default label is the frontend's host. So local, staging and production
 each keep their own target on one consumer. Frontends that share a label
@@ -238,10 +250,38 @@ The module sends each request with a `DruxtClient` from Druxt, so the site's
 `druxt.axios` options, such as its headers, apply. It never follows a
 redirect, so the secret goes only to `druxt.baseUrl`.
 
+To read the targets back, send the consumer's client ID in the
+`X-Consumer-ID` header, or put `?consumerId=<client id>` or
+`?consumer=<uuid>` on the URL. A request that doesn't name a consumer gets a 404,
+"No consumer could be identified from the request", even with a valid
+token. As a site administrator, open this in the browser:
+
+```text
+https://cms.example.com/api/consumer-node-preview/targets?consumerId=frontend
+```
+
 The requests go from Nuxt's server, not from a browser, so they don't need
 CORS settings. They don't send a session cookie, so Drupal does not ask for a
 CSRF token. Use `https` for `druxt.baseUrl`, because the token request sends
 the secret.
+
+### Targets in settings.php
+
+A site can also have a target for the same frontend in `settings.php`. Then
+the Frontend picker shows both. The registered one has the consumer's label
+in front of its own, such as `Frontend: www.example.com`.
+
+Once registration works, remove the `settings.php` target. Or keep it as a
+fallback for when registration fails. `settings.php` targets come first in
+the picker.
+
+Consumer Node Preview's `default` setting picks the target that opens first.
+Its value is `'settings:<name>'` for a `settings.php` target, or
+`'<consumer id>:<delta>'` for a consumer's target. `'2:0'` is the first
+target of consumer 2. Registration keeps a replaced target in its place, and
+adds a new target at the end of the list. If `default` names a target that
+is gone, the first target in the picker opens. So when you remove the
+`settings.php` target, change `default` or remove it.
 
 ### Drupal setup for automatic registration
 
@@ -252,6 +292,12 @@ the secret.
    composer require drupal/simple_oauth:^6.1
    drush en simple_oauth
    ```
+
+   Simple OAuth adds required fields to every consumer. The existing
+   consumers then fail validation until you edit them. Edit and save each
+   one, and set its **Grant types**. The default consumer also needs an
+   **Access token expiration time**, or it shows "This value should not be
+   null". A recipe that imports a consumer needs these fields too.
 
 2. Make Simple OAuth's keys in a folder outside the web root, and set their
    paths. The paths are also at **Administration > Configuration > People >
@@ -429,7 +475,8 @@ The page shows "Preview unavailable" and a message.
 - **"The preview endpoint is not on this site or its Drupal site".** Add the
   preview's origin to the `origins` option.
 - **"The URL fragment has no preview endpoint".** The preview target's URL
-  template has no `#[jsonapi_node_preview]` at the end.
+  template has no `#[jsonapi_node_preview_path]` or `#[jsonapi_node_preview]`
+  at the end.
 - **HTTP 400.** An `include` path that the previewed type does not have. Key
   that path by type.
 
