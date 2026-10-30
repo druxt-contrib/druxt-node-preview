@@ -139,7 +139,7 @@ export default {
       try {
         const endpoint = this.$druxtNodePreview.endpoint()
         if (!endpoint) {
-          this.error = 'No preview endpoint was provided in the URL fragment.'
+          this.error = 'The URL fragment has no preview endpoint.'
           return
         }
         const document = await this.$druxtNodePreview.fetch(endpoint)

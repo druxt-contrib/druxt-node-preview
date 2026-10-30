@@ -274,8 +274,8 @@ The page shows "Preview unavailable" and a message.
   3. The CORS settings in `services.yml` name the frontend's origin.
 - **"The preview endpoint is not on this site or its Drupal site".** Add the
   preview's origin to the `origins` option.
-- **"No preview endpoint was provided in the URL fragment".** The preview
-  target's URL template has no `#[jsonapi_node_preview]` at the end.
+- **"The URL fragment has no preview endpoint".** The preview target's URL
+  template has no `#[jsonapi_node_preview]` at the end.
 - **HTTP 400.** An `include` path that the previewed type does not have. Key
   that path by type.
 
