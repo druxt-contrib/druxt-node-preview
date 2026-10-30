@@ -182,4 +182,54 @@ test.describe('druxt frontend', () => {
       frame.locator('.layout-preview .druxt-node-preview')
     ).toContainText(ADDED)
   })
+
+  test.describe('automatic registration', () => {
+    // run.sh starts the Druxt frontend with the register options and the
+    // e2e consumer's secret. The frontend registers its target on start,
+    // before the stack counts as up.
+    const LABEL = new URL(DRUXT).host
+    const URL_TEMPLATE = `${DRUXT}/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]`
+
+    test("the consumer has the frontend's target, and keeps its own", async ({
+      page,
+    }) => {
+      // The admin session reads the consumer over Consumer Node Preview's
+      // API. A GET needs no CSRF token.
+      const response = await page.request.get(
+        `${DRUPAL}/api/consumer-node-preview/targets?consumerId=e2e_druxt`
+      )
+      expect(response.status()).toBe(200)
+      expect(await response.json()).toMatchObject({
+        targets: [
+          {
+            label: 'Kept',
+            url: 'https://kept.example.com/preview?vm=[view_mode]#[jsonapi_node_preview]',
+          },
+          { label: LABEL, url: URL_TEMPLATE },
+        ],
+        // The example frontend lists its layouts, so they replaced the
+        // consumer's own list.
+        layouts: ['default', 'preview'],
+      })
+    })
+
+    test('the registered target renders the unsaved paragraphs', async ({
+      page,
+    }) => {
+      await editAndPreview(page)
+      // The Frontend picker names a consumer's target "<consumer>: <target>".
+      const frame = await pickFrontend(
+        page,
+        `E2E Druxt frontend: ${LABEL}`,
+        DRUXT
+      )
+      // The registered layouts reached Drupal, so the preview opens in the
+      // first one.
+      await expect(page.locator(FRAME)).toHaveAttribute('src', /layout=default/)
+
+      const root = frame.locator('.druxt-node-preview')
+      await frameExpect(root).toContainText(EDITED)
+      await expect(root).toContainText(ADDED)
+    })
+  })
 })

@@ -1,0 +1,17 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - user.role.preview_target_registrar
+id: preview_targets
+name: preview_targets
+description: 'Register the frontend as a node preview target on its own consumer.'
+grant_types:
+  client_credentials:
+    status: true
+    description: ''
+umbrella: false
+parent: null
+granularity_id: role
+granularity_configuration:
+  role: preview_target_registrar
