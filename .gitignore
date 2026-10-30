@@ -66,6 +66,7 @@ typings/
 
 # Output of 'npm pack'
 *.tgz
+package-files.txt
 
 # Yarn Integrity file
 .yarn-integrity
