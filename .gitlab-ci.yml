@@ -64,7 +64,7 @@ test:build:
     # Pack as npm publish does, and check the tarball holds what Nuxt loads.
     - |
       npm pack
-      for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue; do
+      for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue templates/DruxtNodePreview.vue; do
         tar -tzf druxt-contrib-node-preview-*.tgz | grep -qx "package/$f" || { echo "The package is missing $f"; exit 1; }
       done
   artifacts:

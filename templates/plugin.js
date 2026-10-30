@@ -3,8 +3,12 @@
  *
  * Fetches a JSON:API Node Preview document with the editor's Drupal session,
  * and seeds the Druxt store with it so DruxtEntity renders the unsaved data.
+ *
+ * It also registers the `druxtNodePreview` store module. Its `active` state is
+ * true once a preview is seeded, so a site component that refetches its data
+ * (for example paragraphs at a revision) can skip that and read the store.
  */
-export default ({ store }, inject) => {
+export default ({ app, store }, inject) => {
   const include = JSON.parse('<%= JSON.stringify(options.include) %>')
   // Origins the preview may come from, besides this site's own.
   const origins = JSON.parse('<%= JSON.stringify(options.origins) %>')
@@ -39,6 +43,17 @@ export default ({ store }, inject) => {
   }
 
   /**
+   * Throws unless a response's content type is JSON:API.
+   *
+   * @param {*} type - The Content-Type header.
+   */
+  const checkType = (type) => {
+    if (!String(type || '').includes('application/vnd.api+json')) {
+      throw new Error('The preview response is not a JSON:API document.')
+    }
+  }
+
+  /**
    * Throws unless the document is safe to put in the Druxt store.
    *
    * Every resource needs a JSON:API type and a UUID. The store keys resources
@@ -63,6 +78,46 @@ export default ({ store }, inject) => {
     }
   }
 
+  if (!store.hasModule('druxtNodePreview')) {
+    store.registerModule('druxtNodePreview', {
+      namespaced: true,
+      state: () => ({ active: false, uuid: null }),
+      mutations: {
+        start(state, uuid) {
+          state.active = true
+          state.uuid = uuid
+        },
+      },
+    }, { preserveState: !!(store.state || {}).druxtNodePreview })
+  }
+
+  /**
+   * Adds the configured includes, unless the URL already has an include.
+   *
+   * Consumer Node Preview already includes a node's paragraphs.
+   *
+   * @param {string} url - The endpoint.
+   *
+   * @returns {string} The URL to request.
+   */
+  const withInclude = (url) => {
+    if (!include.length || /[?&]include=/.test(url)) return url
+    return url + (url.includes('?') ? '&' : '?') + 'include=' + include.join(',')
+  }
+
+  /**
+   * Builds an error that carries the status and the start of the body.
+   *
+   * @param {string} url - The requested URL.
+   * @param {number} status - The HTTP status.
+   * @param {string} body - The response body.
+   *
+   * @returns {Error} The error.
+   */
+  const failure = (url, status, body) => new Error(
+    'Preview request failed with HTTP ' + status + ' for ' + url + (body ? ': ' + String(body).slice(0, 300) : '')
+  )
+
   const plugin = {
     /**
      * Returns the preview endpoint from the URL fragment.
@@ -81,7 +136,13 @@ export default ({ store }, inject) => {
     },
 
     /**
-     * Fetches the preview document with credentials.
+     * Fetches the preview document with the editor's session.
+     *
+     * The request goes through the Druxt client, with credentials. The site's
+     * request interceptors apply, and the editor's session cookie goes with
+     * it.
+     * A path is resolved against the frontend's own origin, which suits a
+     * site that proxies Drupal.
      *
      * @param {string} endpoint - The JSON:API Node Preview endpoint.
      *
@@ -89,22 +150,29 @@ export default ({ store }, inject) => {
      */
     fetch: async (endpoint) => {
       const uuid = checkEndpoint(endpoint)
-      let url = endpoint
-      if (include.length) {
-        url += (url.includes('?') ? '&' : '?') + 'include=' + include.join(',')
+      const url = new URL(withInclude(endpoint), window.location.origin).href
+      const headers = { Accept: 'application/vnd.api+json' }
+      const client = (app.$druxt || {}).axios
+      if (client) {
+        let response
+        try {
+          response = await client.get(url, { headers, withCredentials: true })
+        }
+        catch (error) {
+          const failed = error.response || {}
+          if (!failed.status) throw error
+          const body = typeof failed.data === 'string' ? failed.data : JSON.stringify(failed.data || '')
+          throw failure(url, failed.status, body)
+        }
+        checkType((response.headers || {})['content-type'])
+        checkDocument(response.data, uuid)
+        return response.data
       }
-      const response = await window.fetch(url, {
-        credentials: 'include',
-        headers: { Accept: 'application/vnd.api+json' },
-      })
+      const response = await window.fetch(url, { credentials: 'include', headers })
       if (!response.ok) {
-        // Carry the start of the body: a bare status is hard to act on.
-        const body = (await response.text().catch(() => '')).slice(0, 300)
-        throw new Error('Preview request failed with HTTP ' + response.status + ' for ' + url + (body ? ': ' + body : ''))
+        throw failure(url, response.status, await response.text().catch(() => ''))
       }
-      if (!((response.headers && response.headers.get('content-type')) || '').includes('application/vnd.api+json')) {
-        throw new Error('The preview response is not a JSON:API document.')
-      }
+      checkType(response.headers && response.headers.get('content-type'))
       const doc = await response.json()
       checkDocument(doc, uuid)
       return doc
@@ -127,6 +195,7 @@ export default ({ store }, inject) => {
       for (const included of doc.included || []) {
         store.commit('druxt/addResource', { resource: { data: included } })
       }
+      store.commit('druxtNodePreview/start', doc.data.id)
       return { type: doc.data.type, id: doc.data.id }
     },
   }
