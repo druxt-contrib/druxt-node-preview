@@ -13,6 +13,7 @@
 -->
 
 [![CI](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml/badge.svg?branch=0.x)](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/druxt-contrib/druxt-node-preview/branch/0.x/graph/badge.svg)](https://codecov.io/gh/druxt-contrib/druxt-node-preview)
 
 > Node Preview module for Druxt
 
