@@ -1,0 +1,33 @@
+---
+name: Bug report
+about: Something does not work as documented
+title: ''
+labels: bug
+assignees: ''
+---
+
+## What happened
+
+## What you expected
+
+## How to reproduce
+
+1.
+2.
+3.
+
+## Versions
+
+|                       |     |
+| --------------------- | --- |
+| Module                |     |
+| Druxt                 |     |
+| Nuxt                  |     |
+| Node                  |     |
+| Drupal                |     |
+| Consumer Node Preview |     |
+| JSON:API Node Preview |     |
+
+## Anything else
+
+Logs, screenshots, or a link to a reproduction.
