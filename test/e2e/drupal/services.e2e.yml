@@ -3,12 +3,14 @@
 # The frontends fetch the preview endpoint from their own origins with the
 # editor's session. On localhost every port is the same site, so the Lax
 # session cookie already flows; only CORS needs the frontend origins.
+#
+# run.sh replaces each port placeholder with that frontend's port.
 parameters:
   cors.config:
     enabled: true
     allowedHeaders: ['*']
     allowedMethods: ['GET']
-    allowedOrigins: ['http://localhost:3111', 'http://localhost:3112']
+    allowedOrigins: ['http://localhost:FRONTEND_DRUXT_PORT', 'http://localhost:FRONTEND_STATIC_PORT']
     allowedOriginsPatterns: []
     exposedHeaders: false
     maxAge: 3600
