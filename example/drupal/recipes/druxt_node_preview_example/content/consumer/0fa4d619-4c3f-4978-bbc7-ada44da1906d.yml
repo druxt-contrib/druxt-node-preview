@@ -25,4 +25,9 @@ default:
   preview_targets:
     -
       label: Druxt
-      url: 'http://localhost:3000/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]'
+      url: 'http://localhost:3000/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]'
+  preview_layouts:
+    -
+      value: default
+    -
+      value: preview

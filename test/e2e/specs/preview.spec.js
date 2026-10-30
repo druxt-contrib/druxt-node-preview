@@ -11,9 +11,10 @@ const EDITED = `Alpha edited ${RUN}`
 const ADDED = `Brand new ${RUN}`
 
 // Consumer Node Preview's preview screen: a Frontend tab with the frame, its
-// Frontend and View mode selects, and a Drupal tab.
+// Frontend, Layout and View mode selects, and a Drupal tab.
 const FRAME = '[data-consumer-node-preview-frame]'
 const TARGETS = '[data-consumer-node-preview-target]'
+const LAYOUTS = '[data-consumer-node-preview-layout]'
 const VIEW_MODES = '[data-consumer-node-preview-view-mode]'
 
 test.beforeAll(() => {
@@ -127,4 +128,22 @@ test.describe('druxt frontend', () => {
     await frameExpect(frame.locator('.druxt-node-preview')).toHaveAttribute('data-view-mode', 'teaser')
   })
 
+  test('the Layout select renders the preview in a listed layout', async ({ page }) => {
+    await editAndPreview(page)
+    await pickFrontend(page, 'E2E Druxt', DRUXT)
+
+    // The target lists "default" first, so the preview opens in the site's
+    // own layout.
+    let frame = page.frameLocator(FRAME)
+    await frameExpect(frame.locator('.druxt-node-preview')).toContainText(EDITED)
+    await expect(frame.locator('.layout-preview')).toHaveCount(0)
+
+    await page.locator(LAYOUTS).selectOption('preview')
+    await expect(page.locator(FRAME)).toHaveAttribute('src', /layout=preview/)
+    frame = page.frameLocator(FRAME)
+    // The page sets the layout itself once mounted, and the new layout's page
+    // loads the preview.
+    await frameExpect(frame.locator('.layout-preview .druxt-node-preview')).toContainText(EDITED)
+    await expect(frame.locator('.layout-preview .druxt-node-preview')).toContainText(ADDED)
+  })
 })

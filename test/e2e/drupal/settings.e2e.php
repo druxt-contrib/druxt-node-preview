@@ -13,7 +13,9 @@ $e2e_static = 'http://localhost:' . (getenv('FRONTEND_STATIC_PORT') ?: '3112');
 $settings['consumer_node_preview']['targets'] = [
   'druxt' => [
     'label' => 'E2E Druxt',
-    'url' => $e2e_druxt . '/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]',
+    'url' => $e2e_druxt . '/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]',
+    // The Druxt frontend's layouts. The first is the one a preview opens in.
+    'layouts' => ['default', 'preview'],
   ],
   'static' => [
     'label' => 'E2E Static',

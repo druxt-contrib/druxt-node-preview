@@ -23,7 +23,9 @@ The `druxt_node_preview_example` recipe installs the modules, and lets
 anonymous users read the site's schema, as the Druxt frontend does. It adds a
 Text paragraph type, a Landing page content type with a Content field of
 paragraphs, and a Landing page with two paragraphs to preview. Its Example
-frontend consumer has a preview target for the Nuxt app below.
+frontend consumer has a preview target for the Nuxt app below, and lists the
+`default` and `preview` layouts. The first opens by default, and the example
+app has a bare `preview` layout.
 
 Then:
 

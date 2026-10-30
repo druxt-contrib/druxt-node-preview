@@ -38,6 +38,7 @@ describe('DruxtNodePreview module', () => {
     expect(context.routes[0].name).toBe('druxt-node-preview')
     expect(context.addedPlugins[0].options.include).toEqual([])
     expect(context.addedPlugins[0].options.origins).toEqual([])
+    expect(context.addedPlugins[0].options.layouts).toEqual([])
   })
 
   test('the preview route goes before a site catch-all', () => {
@@ -62,18 +63,20 @@ describe('DruxtNodePreview module', () => {
 
   test('module options override the defaults', () => {
     const context = buildContext()
-    NuxtModule.call(context, { path: '/preview', include: ['field_body'] })
+    NuxtModule.call(context, { path: '/preview', include: ['field_body'], layouts: ['bare', 'not a name'] })
 
     expect(context.routes[0].path).toBe('/preview')
     expect(context.addedPlugins[0].options.include).toEqual(['field_body'])
+    expect(context.addedPlugins[0].options.layouts).toEqual(['bare'])
   })
 
   test('nuxt.config druxt.nodePreview options are used', () => {
-    const context = buildContext({ nodePreview: { path: '/p', include: ['field_a'] } })
+    const context = buildContext({ nodePreview: { path: '/p', include: ['field_a'], layouts: ['default', 'preview'] } })
     NuxtModule.call(context)
 
     expect(context.routes[0].path).toBe('/p')
     expect(context.addedPlugins[0].options.include).toEqual(['field_a'])
+    expect(context.addedPlugins[0].options.layouts).toEqual(['default', 'preview'])
   })
 
   // druxt-site sets druxt.baseUrl from its own module options, and Nuxt may
@@ -111,6 +114,15 @@ describe('DruxtNodePreview module', () => {
     expect(context.addedPlugins[0].options.include).toEqual({ 'node--page': ['field_media'] })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"bad path"'))
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('"page"'))
+    warn.mockRestore()
+  })
+
+  test('a layout name that is not plain is reported, not dropped quietly', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({ nodePreview: { layouts: ['preview', 'docs/bare', 7] } })
+    NuxtModule.call(context)
+    expect(context.addedPlugins[0].options.layouts).toEqual(['preview'])
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"docs/bare"'))
     warn.mockRestore()
   })
 })
