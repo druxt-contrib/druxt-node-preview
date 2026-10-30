@@ -173,14 +173,15 @@ lint:attribution:
     - section_end "attribution"
 
 # Project voice over the markdown a change touches, its commit messages and the
-# merge request description. The changesets README is third-party text.
+# merge request description. The changesets README is third-party text, and
+# changesets writes CHANGELOG.md in its own format.
 lint:prose:
   image: node:16.20.1
   stage: lint
   interruptible: true
   variables:
     GIT_DEPTH: 0
-    PROSE_LINT_GLOB: "!{.changeset,example/drupal}/**"
+    PROSE_LINT_GLOB: "!{.changeset/**,example/drupal/**,CHANGELOG.md}"
   cache:
     key: vale-3.17.1
     paths:

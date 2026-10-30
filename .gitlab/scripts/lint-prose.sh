@@ -123,6 +123,13 @@ elif [ -n "${CI_MERGE_REQUEST_IID:-}" ]; then
   exit 2
 fi
 
+# A review bot such as CodeRabbit adds its own summary to the description,
+# between "auto-generated comment" markers. The author did not write it, so
+# it is not linted.
+if [ -f "$inputs/merge-request.md" ]; then
+  sed -i '/<!-- This is an auto-generated comment/,/<!-- end of auto-generated comment/d' "$inputs/merge-request.md"
+fi
+
 generated=()
 for f in "$inputs"/commits/*.md "$inputs/merge-request.md"; do
   [ -f "$f" ] && generated+=("${f#"$inputs"/}")
