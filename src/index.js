@@ -104,7 +104,7 @@ const toLayouts = (value) => {
  *
  * The Drupal site points a Consumer Node Preview target at the page:
  *
- *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]
+ *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]
  *
  * The page renders in the Nuxt layout named by `?layout=`, when that name is
  * in the `layouts` option. Any other name, or none, gives the default layout.

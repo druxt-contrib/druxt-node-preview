@@ -188,7 +188,7 @@ test.describe('druxt frontend', () => {
     // e2e consumer's secret. The frontend registers its target on start,
     // before the stack counts as up.
     const LABEL = new URL(DRUXT).host
-    const URL_TEMPLATE = `${DRUXT}/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]`
+    const URL_TEMPLATE = `${DRUXT}/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]`
 
     test("the consumer has the frontend's target, and keeps its own", async ({
       page,
@@ -226,6 +226,9 @@ test.describe('druxt frontend', () => {
       // The registered layouts reached Drupal, so the preview opens in the
       // first one.
       await expect(page.locator(FRAME)).toHaveAttribute('src', /layout=default/)
+      // The registered target sends the endpoint as a path. The Druxt client
+      // resolves it against druxt.baseUrl.
+      await expect(page.locator(FRAME)).toHaveAttribute('src', /#\/jsonapi\//)
 
       const root = frame.locator('.druxt-node-preview')
       await frameExpect(root).toContainText(EDITED)

@@ -188,7 +188,13 @@ export const resolveRegister = (value, env, druxt = {}) => {
 /**
  * Returns the URL template of the frontend's preview target.
  *
- * Drupal replaces the tokens in square brackets for each preview.
+ * Drupal replaces the tokens in square brackets for each preview. The
+ * endpoint goes in as a path, [jsonapi_node_preview_path]. The page fetches
+ * it through the Druxt client, which resolves it against its own base URL.
+ * So the preview works for an editor on Drupal's host or on the frontend's,
+ * and through a proxy that serves Drupal on the frontend's origin. The
+ * target is on the Drupal site at druxt.baseUrl, so the path always names
+ * that site.
  *
  * @param {string} url - The frontend's base URL.
  * @param {string} path - The preview page's path.
@@ -201,7 +207,7 @@ export const targetUrl = (url, path, layouts) =>
   path +
   '?vm=[view_mode]' +
   (layouts.length ? '&layout=[layout]' : '') +
-  '#[jsonapi_node_preview]'
+  '#[jsonapi_node_preview_path]'
 
 /**
  * Adds a target to a list, or replaces the first one with its label.

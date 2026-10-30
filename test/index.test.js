@@ -278,7 +278,7 @@ describe('DruxtNodePreview module', () => {
         targets: [
           {
             label: 'Production',
-            url: 'https://www.example.com/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]',
+            url: 'https://www.example.com/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]',
           },
         ],
         layouts: ['default', 'preview'],
@@ -300,7 +300,7 @@ describe('DruxtNodePreview module', () => {
             targets: [
               {
                 label: 'www.example.com',
-                url: 'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]',
+                url: 'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path]',
               },
             ],
           }),

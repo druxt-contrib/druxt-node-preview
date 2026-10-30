@@ -44,7 +44,7 @@ const settings = (overrides = {}) => ({
 })
 
 const OURS =
-  'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]'
+  'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path]'
 
 let warn
 let info
@@ -315,7 +315,7 @@ describe('targetUrl', () => {
     expect(
       targetUrl('https://www.example.com', '/druxt/node/preview', [])
     ).toBe(
-      'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview]'
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path]'
     )
     expect(
       targetUrl('https://www.example.com', '/druxt/node/preview', [
@@ -323,7 +323,7 @@ describe('targetUrl', () => {
         'preview',
       ])
     ).toBe(
-      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]'
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]'
     )
   })
 })
@@ -505,7 +505,7 @@ describe('registerTarget', () => {
 
   test('sends the layouts when they are configured', async () => {
     const url =
-      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]'
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]'
     answer(tokenOk(), current([], ['old']), current([]))
     await registerTarget(
       settings({ layouts: ['default', 'preview', 'default'] })
@@ -518,7 +518,7 @@ describe('registerTarget', () => {
 
   test('puts when only the layouts differ', async () => {
     const url =
-      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]'
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]'
     answer(
       tokenOk(),
       current([{ label: 'www.example.com', url }], ['preview']),
@@ -535,7 +535,7 @@ describe('registerTarget', () => {
 
   test('skips the PUT when the target and the layouts are up to date', async () => {
     const url =
-      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]'
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]'
     answer(
       tokenOk(),
       current([{ label: 'www.example.com', url }], ['default', 'preview'])

@@ -43,7 +43,7 @@ default:
   preview_targets:
     -
       label: 'localhost:3000'
-      url: 'http://localhost:3000/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]'
+      url: 'http://localhost:3000/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]'
   preview_layouts:
     -
       value: default
