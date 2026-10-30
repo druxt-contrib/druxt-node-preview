@@ -82,10 +82,18 @@ test:e2e:
   # One e2e run at a time. Stacks that build at once on the shared runner
   # slow each other down until tests flake.
   resource_group: e2e
+  variables:
+    # The Druxt tier runs here too, as on GitHub Actions.
+    E2E_DRUXT: "1"
   script:
     # deasync builds a native module during npm ci, so the image needs make
     # and a compiler.
-    - apt-get update && apt-get install -y -q build-essential php-cli php-sqlite3 php-gd php-xml php-mbstring php-curl composer
+    - apt-get update && apt-get install -y -q build-essential curl php-cli php-sqlite3 php-gd php-xml php-mbstring php-curl composer
+    # The Druxt tier runs its Nuxt frontend on Node 16 through mise, beside
+    # the newer Node that Playwright needs.
+    - curl -fsSL https://mise.run | sh
+    - export PATH="$HOME/.local/bin:$PATH"
+    - mise install node@16.20.1
     - npm ci
     - test/e2e/run.sh
   artifacts:

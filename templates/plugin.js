@@ -98,7 +98,9 @@ export default ({ store }, inject) => {
         headers: { Accept: 'application/vnd.api+json' },
       })
       if (!response.ok) {
-        throw new Error('Preview request failed with HTTP ' + response.status)
+        // Carry the start of the body: a bare status is hard to act on.
+        const body = (await response.text().catch(() => '')).slice(0, 300)
+        throw new Error('Preview request failed with HTTP ' + response.status + ' for ' + url + (body ? ': ' + body : ''))
       }
       if (!((response.headers && response.headers.get('content-type')) || '').includes('application/vnd.api+json')) {
         throw new Error('The preview response is not a JSON:API document.')

@@ -107,7 +107,7 @@ test.describe('druxt frontend', () => {
     const frame = await pickFrontend(page, 'E2E Druxt', DRUXT)
 
     const root = frame.locator('.druxt-node-preview')
-    await expect(root).toHaveAttribute('data-entity-type', 'node--article')
+    await expect(root).toHaveAttribute('data-entity-type', 'node--e2e_article')
     await expect(root).toContainText(EDITED)
     await expect(root).toContainText(ADDED)
   })

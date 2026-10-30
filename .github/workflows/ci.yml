@@ -115,12 +115,20 @@ jobs:
           php-version: '8.3'
           extensions: gd, pdo_sqlite
           tools: composer
+      # The Druxt tier runs its Nuxt frontend on Node 16 through mise, beside
+      # the newer Node that Playwright needs.
+      - uses: jdx/mise-action@v2
+        with:
+          install: false
+      - run: mise install node@16.20.1
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run the end to end suite
         run: test/e2e/run.sh
         env:
-          E2E_DRUXT: ${{ vars.E2E_DRUXT || '0' }}
+          # The Druxt tier runs on every pull request. Set the E2E_DRUXT
+          # repository variable to 0 to leave it out.
+          E2E_DRUXT: ${{ vars.E2E_DRUXT || '1' }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

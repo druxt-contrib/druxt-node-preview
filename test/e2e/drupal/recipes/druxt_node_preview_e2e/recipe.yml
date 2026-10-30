@@ -1,10 +1,16 @@
 name: 'Druxt Node Preview end to end'
-description: 'Sets up the end to end suite backend: Consumer Node Preview and Paragraphs, an E2E Article type with a field of Text paragraphs, and an article with two saved paragraphs.'
+description: 'Sets up the end to end suite backend: Consumer Node Preview, Paragraphs and Druxt, an E2E Article type with a field of Text paragraphs, and an article with two saved paragraphs.'
 type: 'Content type'
 install:
   - consumer_node_preview
   - paragraphs
+  - druxt
 config:
   # Import only the config the site lacks. The example's recipe runs after
   # this one and brings the same Text paragraph type.
   strict: false
+  actions:
+    # The Druxt frontend builds its schema over JSON:API as anonymous.
+    user.role.anonymous:
+      grantPermissions:
+        - 'access druxt resources'
