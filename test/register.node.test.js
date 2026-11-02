@@ -30,14 +30,13 @@ const close = (server) =>
 
 const settings = (baseUrl, overrides = {}) => ({
   baseUrl,
-  druxt: { baseUrl },
+  druxt: { baseUrl, axios: { timeout: 1000 } },
   url: 'https://www.example.com',
   label: 'www.example.com',
   consumer: 'frontend',
   secret: 'the-client-secret-value',
   path: '/druxt/node/preview',
   layouts: [],
-  timeout: 1000,
   ...overrides,
 })
 
@@ -70,10 +69,14 @@ test('a request that Drupal does not answer stops at the timeout', async () => {
   try {
     const started = Date.now()
     await expect(
-      registerTarget(settings(drupal.base, { timeout: 200 }))
+      registerTarget(
+        settings(drupal.base, {
+          druxt: { baseUrl: drupal.base, axios: { timeout: 200 } },
+        })
+      )
     ).resolves.toBe('failed')
     expect(Date.now() - started).toBeLessThan(3000)
-    expect(warn.mock.calls[0][0]).toContain('within 0.2 seconds')
+    expect(warn.mock.calls[0][0]).toContain('timeout of 200ms')
   } finally {
     await close(drupal.server)
   }

@@ -1,6 +1,7 @@
 # DruxtNodePreview example
 
 A paired Drupal and Nuxt setup for trying the preview flow end to end.
+Each block of commands starts in this `example` directory.
 
 ## Drupal
 
@@ -82,7 +83,8 @@ vendor/bin/drush config:set simple_oauth.settings public_key "$PWD/keys/public.k
 vendor/bin/drush config:set simple_oauth.settings private_key "$PWD/keys/private.key" -y
 ```
 
-Then start the app with the consumer's details in the environment:
+Stop the app if it is running, so the new one gets port 3000. Then start it
+with the consumer's details in the environment:
 
 ```sh
 cd nuxt
@@ -92,5 +94,5 @@ DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' \
 npm run dev
 ```
 
-The recipe's target already matches, so the build output says that the target
-is up to date.
+The build output says that it registered the target. The recipe's target has
+the same label, so Drupal replaces it.

@@ -26,13 +26,19 @@ export const routeDruxtClient = (DruxtClient, request) => {
         body,
         config,
       })
-      return (
-        response && {
-          status: response.status,
-          data: response.text,
-          headers: response.headers || {},
-        }
-      )
+      if (!response) return response
+      // Axios parses a JSON body, and leaves any other body as text.
+      let parsed = response.text
+      try {
+        parsed = JSON.parse(response.text)
+      } catch {
+        // Not JSON, so it stays as text.
+      }
+      return {
+        status: response.status,
+        data: parsed,
+        headers: response.headers || {},
+      }
     })
     clients.push(client)
     return client

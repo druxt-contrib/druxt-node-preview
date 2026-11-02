@@ -187,8 +187,9 @@ test.describe('druxt frontend', () => {
     // run.sh starts the Druxt frontend with the register options and the
     // e2e consumer's secret. The frontend registers its target on start,
     // before the stack counts as up.
-    const LABEL = new URL(DRUXT).host
-    const URL_TEMPLATE = `${DRUXT}/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]`
+    // Playwright runs this block even when the tests skip, and DRUXT can be
+    // empty then. So the values wait until a test needs them.
+    const label = () => new URL(DRUXT).host
 
     test("the consumer has the frontend's target, and keeps its own", async ({
       page,
@@ -205,7 +206,10 @@ test.describe('druxt frontend', () => {
             label: 'Kept',
             url: 'https://kept.example.com/preview?vm=[view_mode]#[jsonapi_node_preview]',
           },
-          { label: LABEL, url: URL_TEMPLATE },
+          {
+            label: label(),
+            url: `${DRUXT}/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]`,
+          },
         ],
         // The example frontend lists its layouts, so they replaced the
         // consumer's own list.
@@ -220,7 +224,7 @@ test.describe('druxt frontend', () => {
       // The Frontend picker names a consumer's target "<consumer>: <target>".
       const frame = await pickFrontend(
         page,
-        `E2E Druxt frontend: ${LABEL}`,
+        `E2E Druxt frontend: ${label()}`,
         DRUXT
       )
       // The registered layouts reached Drupal, so the preview opens in the

@@ -188,7 +188,6 @@ DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' npm run start
 | `consumer` | `DRUXT_NODE_PREVIEW_CLIENT_ID`     | None                                         | The client ID of the consumer to register on. See [The consumer](#the-consumer).                                                          |
 | None       | `DRUXT_NODE_PREVIEW_CLIENT_SECRET` | None                                         | The consumer's secret. The module reads it only from the environment.                                                                     |
 | `label`    | None                               | The host of `url`, such as `www.example.com` | The target's name in Drupal's Frontend picker.                                                                                            |
-| `timeout`  | None                               | `5000`                                       | The longest time each request to Drupal can take, in milliseconds. It wins over a `timeout` in `druxt.axios`.                             |
 
 An environment variable wins over the option in `nuxt.config.js`. So one
 config serves local, staging and production, and each host sets its own
@@ -214,13 +213,11 @@ When Nuxt is ready, in `nuxt dev`, `nuxt build`, `nuxt generate` and
 
 1. Gets a token from `/oauth/token` on `druxt.baseUrl`, with Simple OAuth's
    client credentials grant.
-2. Reads the consumer's targets from Consumer Node Preview's
+2. Sends its target in a PATCH to Consumer Node Preview's
    `/api/consumer-node-preview/targets`. The `X-Consumer-ID` header names the
-   consumer by its client ID.
-3. Replaces the target that has the same label, or adds a new one. The other
-   targets stay as they are.
-4. Writes the targets back. If nothing changed, it skips this step and says
-   that the target is up to date.
+   consumer by its client ID. Drupal replaces the target that has the same
+   label, or adds a new one, and records the time. The other targets stay as
+   they are.
 
 The target URL is the one from [Drupal setup](#drupal-setup): `url`, then
 the `path` option, then
@@ -229,18 +226,25 @@ the `path` option, then
 because the target is on the Drupal site at `druxt.baseUrl`, the site the
 Druxt client fetches from.
 
-If the `layouts` option is set, the module also writes it as the consumer's
-Preview layouts. If not, Drupal keeps the consumer's layouts.
+If the `layouts` option is set, the PATCH also sets the consumer's Preview
+layouts. If not, Drupal keeps the consumer's layouts.
 
-The module registers once for each Nuxt process. A failure never stops the
-build or the server. The module shows a warning and Nuxt carries on. The
-consumer keeps the targets it had.
+The module registers when each Nuxt process starts, then every 6 hours while
+it runs. Consumer Node Preview moves a target to its Inactive group after a day
+without a registration, and deletes it after 30 days. So a frontend that keeps
+running stays active. A static site only registers when it builds, so its
+target goes inactive unless it builds again in that time. The target can still
+be picked while it is inactive.
+
+A failure never stops the build or the server. The module shows a warning and
+Nuxt carries on. The consumer keeps the targets it had.
 
 `nuxt build` and then `nuxt start` are two processes, so the module registers
-twice. The second run says that the target is up to date. The start alone is
-enough to register, so a build without the secret only shows a warning. On a
-host that builds when its container starts, the secret can be a runtime
-variable only.
+twice. The start alone is enough to register, so a build without the secret
+only shows a warning. On a host that builds when its container starts, the
+secret can be a runtime variable only.
+
+Each request uses the `timeout` in `druxt.axios`, or 5 seconds without one.
 
 The default label is the frontend's host. So local, staging and production
 each keep their own target on one consumer. Frontends that share a label
@@ -485,25 +489,28 @@ register the preview target", then says what went wrong:
 
 - **"druxt.baseUrl is not set".** Set `druxt.baseUrl` to the Drupal site's
   URL.
-- **"Drupal did not answer at ...".** Drupal is down, or `druxt.baseUrl` is
-  wrong. A message that ends in "within 5 seconds" means Drupal was too
-  slow. Raise the `timeout` option.
+- **"connect ECONNREFUSED" or a similar network error.** Drupal is down, or
+  `druxt.baseUrl` is wrong.
+- **"timeout of 5000ms exceeded".** Drupal was too slow. Raise the `timeout` in
+  `druxt.axios`.
 - **"Drupal redirected ...".** Drupal sent the request to another URL, such
   as from `http` to `https`. Set `druxt.baseUrl` to the URL Drupal redirects
   to.
 - **"/oauth/token answered HTTP 404".** Simple OAuth is not installed.
-- **"Drupal refused the client credentials".** The secret is wrong, or the
-  consumer is not confidential, does not allow the Client credentials grant,
-  or has no User.
+- **"/oauth/token answered HTTP 400" or "HTTP 401".** The secret is wrong, or
+  the consumer is not confidential, does not allow the Client credentials
+  grant, or has no User.
 - **"You need to set the OAuth2 private key".** Simple OAuth has no keys. See
   step 2 of [Drupal setup for automatic
   registration](#drupal-setup-for-automatic-registration).
-- **"The targets API ... answered HTTP 404".** Consumer Node Preview is not
-  installed, or no consumer has that client ID.
-- **"The targets API answered HTTP 403".** The consumer's User does not own
-  the consumer, or the token's scope does not give the register permission.
-- **"Drupal refused the target (HTTP 422 ...)".** Drupal does not accept the
-  target's URL. Check the `url` and `path` options.
+- **"/api/consumer-node-preview/targets answered HTTP 404".** Consumer Node
+  Preview is not installed, or no consumer has that client ID.
+- **"... answered HTTP 403".** The consumer's User does not own the consumer,
+  or the token's scope does not give the register permission.
+- **"... answered HTTP 405".** Consumer Node Preview is too old. Automatic
+  registration needs a version with the PATCH method.
+- **"... answered HTTP 422".** Drupal does not accept the target's URL. Check
+  the `url` and `path` options.
 
 A warning that starts with "Ignored the register option" means that an
 option is missing or wrong, so the module did not try. It names the option

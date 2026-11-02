@@ -263,24 +263,17 @@ describe('DruxtNodePreview module', () => {
           status: 200,
           text: JSON.stringify({ targets: [], layouts: [] }),
         })
-        .mockResolvedValueOnce({
-          status: 200,
-          text: JSON.stringify({ targets: [], layouts: [] }),
-        })
       await context.hooks.ready()
 
       expect(request.mock.calls.map(([method, url]) => [method, url])).toEqual([
         ['POST', 'https://cms.example.com/oauth/token'],
-        ['GET', 'https://cms.example.com/api/consumer-node-preview/targets'],
-        ['PUT', 'https://cms.example.com/api/consumer-node-preview/targets'],
+        ['PATCH', 'https://cms.example.com/api/consumer-node-preview/targets'],
       ])
-      expect(JSON.parse(request.mock.calls[2][2].body)).toEqual({
-        targets: [
-          {
-            label: 'Production',
-            url: 'https://www.example.com/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]',
-          },
-        ],
+      expect(JSON.parse(request.mock.calls[1][2].body)).toEqual({
+        target: {
+          label: 'Production',
+          url: 'https://www.example.com/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]',
+        },
         layouts: ['default', 'preview'],
       })
     })
@@ -296,14 +289,7 @@ describe('DruxtNodePreview module', () => {
         })
         .mockResolvedValueOnce({
           status: 200,
-          text: JSON.stringify({
-            targets: [
-              {
-                label: 'www.example.com',
-                url: 'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path]',
-              },
-            ],
-          }),
+          text: JSON.stringify({ targets: [] }),
         })
       for (let run = 0; run < 2; run++) {
         const context = buildContext({
@@ -346,7 +332,7 @@ describe('DruxtNodePreview module', () => {
       NuxtModule.call(context)
       expect(context.hooks.ready).toBeUndefined()
       expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('DRUXT_NODE_PREVIEW_CLIENT_SECRET is not set')
+        expect.stringContaining('DRUXT_NODE_PREVIEW_CLIENT_SECRET')
       )
       warn.mockRestore()
     })
