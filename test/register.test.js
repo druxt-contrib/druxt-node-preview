@@ -227,6 +227,25 @@ describe('registerTarget', () => {
     }
   })
 
+  test.each([
+    ['http://cms.example.com', 1],
+    ['https://cms.example.com', 0],
+    ['http://localhost:8080', 0],
+    ['http://127.0.0.1:8080', 0],
+    ['http://[::1]:8080', 0],
+    ['http://druxt.localhost', 0],
+  ])('%s gives %i warnings about plain HTTP', async (baseUrl, count) => {
+    answer(tokenOk(), saved())
+    await expect(registerTarget(settings({ baseUrl }))).resolves.toBe(
+      'registered'
+    )
+    expect(warn).toHaveBeenCalledTimes(count)
+    if (count) {
+      expect(warn.mock.calls[0][0]).toContain('plain HTTP')
+      expect(warn.mock.calls[0][0]).not.toContain(SECRET)
+    }
+  })
+
   describe('failures warn and never throw, and never print the secret or the token', () => {
     const fails = async (expected, ...responses) => {
       answer(...responses)

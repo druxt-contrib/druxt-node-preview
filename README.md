@@ -512,6 +512,10 @@ register the preview target", then says what went wrong:
 - **"... answered HTTP 422".** Drupal does not accept the target's URL. Check
   the `url` and `path` options.
 
+A warning that says "druxt.baseUrl uses plain HTTP" does not stop the
+registration. The secret and the token cross the network unencrypted, so use
+`https` for any host other than your own machine.
+
 A warning that starts with "Ignored the register option" means that an
 option is missing or wrong, so the module did not try. It names the option
 or the environment variable to set.

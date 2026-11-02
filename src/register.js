@@ -208,6 +208,15 @@ export const registerTarget = async ({
   try {
     if (!baseUrl) throw new Error('druxt.baseUrl is not set.')
     const base = baseUrl.replace(/\/+$/, '')
+    const { protocol, hostname } = new URL(base)
+    if (
+      protocol === 'http:' &&
+      !/^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$|\.localhost$/.test(hostname)
+    ) {
+      warn(
+        'druxt.baseUrl uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.'
+      )
+    }
     const client = new DruxtClient(base, {
       ...druxt,
       axios: { timeout: TIMEOUT, ...druxt.axios },
