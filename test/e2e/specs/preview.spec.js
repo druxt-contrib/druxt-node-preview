@@ -221,12 +221,9 @@ test.describe('druxt frontend', () => {
       page,
     }) => {
       await editAndPreview(page)
-      // The Frontend picker names a consumer's target "<consumer>: <target>".
-      const frame = await pickFrontend(
-        page,
-        `E2E Druxt frontend: ${label()}`,
-        DRUXT
-      )
+      // The Frontend picker puts the target in its consumer's group, under
+      // its own label.
+      const frame = await pickFrontend(page, label(), DRUXT)
       // The registered layouts reached Drupal, so the preview opens in the
       // first one.
       await expect(page.locator(FRAME)).toHaveAttribute('src', /layout=default/)
