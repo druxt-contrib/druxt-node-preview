@@ -1,0 +1,21 @@
+_meta:
+  version: '1.0'
+  entity_type: user
+  uuid: 5c1d7e2a-3b4f-4a6c-9d8e-2f1a0b9c8d7e
+  default_langcode: en
+default:
+  # The frontend's client credentials user. It owns the consumer, and its
+  # role may register preview targets. The end to end recipe has the same
+  # user, so the import skips it there.
+  name:
+    -
+      value: preview_registrar
+  mail:
+    -
+      value: preview_registrar@example.com
+  status:
+    -
+      value: true
+  roles:
+    -
+      target_id: preview_target_registrar

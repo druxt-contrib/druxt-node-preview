@@ -1,0 +1,11 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - consumer_node_preview
+id: preview_target_registrar
+label: 'Preview target registrar'
+weight: 10
+is_admin: false
+permissions:
+  - 'register consumer node preview targets'

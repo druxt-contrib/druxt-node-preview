@@ -1,10 +1,13 @@
 name: 'Druxt Node Preview example'
-description: 'Sets up the example backend for druxt-node-preview: Consumer Node Preview, Paragraphs and Druxt, a Landing page type with a field of Text paragraphs, a sample Landing page, and a consumer whose preview target is the example Nuxt app.'
+description: 'Sets up the example backend for druxt-node-preview: Consumer Node Preview, Paragraphs and Druxt, a Landing page type with a field of Text paragraphs, a sample Landing page, and a consumer whose preview target is the example Nuxt app. The consumer is set up for the app to register that target itself.'
 type: 'Content type'
 install:
   - consumer_node_preview
   - paragraphs
   - druxt
+  # The frontend can register its own preview target with a client
+  # credentials token.
+  - simple_oauth
 config:
   # Import only the config the site lacks, so the recipe also applies to a site
   # that already has some of it, such as the end to end suite's.

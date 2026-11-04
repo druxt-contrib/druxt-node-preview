@@ -23,6 +23,9 @@ FRONTEND_DRUXT_PORT="${FRONTEND_DRUXT_PORT:-3111}"
 export FRONTEND_STATIC_PORT FRONTEND_DRUXT_PORT
 E2E_DRUXT="${E2E_DRUXT:-0}"
 PIDS=()
+# Simple OAuth's keys and the copy of the e2e recipe with the consumer's
+# secret. Both live outside the repository, and cleanup removes them.
+WORK=""
 LOCK="$ROOT/test/e2e/.run.lock"
 OWN_LOCK=0
 
@@ -37,6 +40,7 @@ cleanup() {
   # A group still running after the wait gets SIGKILL, so the next run does
   # not find its port taken.
   for pid in "${PIDS[@]:-}"; do kill -KILL -- "-$pid" 2>/dev/null || true; done
+  if [ -n "$WORK" ]; then rm -rf "$WORK"; fi
   if [ "$OWN_LOCK" = 1 ]; then rmdir "$LOCK" 2>/dev/null || true; fi
 }
 trap cleanup EXIT
@@ -66,6 +70,23 @@ for port in "${PORTS[@]}"; do
   port_free "$port" || { echo "Port $port is already in use. Override the *_PORT variables."; exit 1; }
 done
 
+echo "==> Making Simple OAuth's keys and the consumer's secret"
+# The Druxt frontend registers its preview target on the e2e consumer with a
+# client credentials token. Each run gets a new key pair and a new secret, so
+# neither is ever in the repository.
+WORK="$(mktemp -d)"
+openssl genrsa -out "$WORK/private.key" 2048 2>/dev/null
+openssl rsa -in "$WORK/private.key" -pubout -out "$WORK/public.key" 2>/dev/null
+# Simple OAuth refuses a key that other users can read.
+chmod 600 "$WORK/private.key" "$WORK/public.key"
+# settings.e2e.php reads the key folder from the environment.
+export E2E_OAUTH_KEYS="$WORK"
+E2E_CLIENT_SECRET="$(openssl rand -hex 24)"
+# The recipe's consumer has a placeholder for the secret. A copy of the
+# recipe gets the real one, and the importer hashes it.
+cp -R "$ROOT/test/e2e/drupal/recipes/druxt_node_preview_e2e" "$WORK/recipe"
+sed -i "s/E2E_CLIENT_SECRET/$E2E_CLIENT_SECRET/" "$WORK/recipe/content/consumer/7e3f9a1c-2d4b-4c8e-a6f0-1b2c3d4e5f60.yml"
+
 echo "==> Building Drupal (example/drupal)"
 cd "$ROOT/example/drupal"
 # Always resolve fresh: the example has no committed lock file.
@@ -92,7 +113,7 @@ sed -i "s/:FRONTEND_DRUXT_PORT'/:$FRONTEND_DRUXT_PORT'/; s/:FRONTEND_STATIC_PORT
 cp "$ROOT/test/e2e/drupal/settings.e2e.php" web/sites/default/settings.e2e.php
 chmod u+w web/sites/default/settings.php
 echo "include \$app_root . '/' . \$site_path . '/settings.e2e.php';" >> web/sites/default/settings.php
-vendor/bin/drush recipe "$ROOT/test/e2e/drupal/recipes/druxt_node_preview_e2e" -q
+vendor/bin/drush recipe "$WORK/recipe" -q
 # The example's own recipe, so the run fails if it breaks. It runs second,
 # because the specs edit node 1, the e2e article.
 vendor/bin/drush recipe ../recipes/druxt_node_preview_example -q
@@ -131,7 +152,13 @@ if [ "$E2E_DRUXT" = "1" ]; then
     echo "The Druxt tier needs mise, to run its frontend on Node 16 while Playwright runs on Node 20 or later."
     exit 1
   fi
-  DRUPAL_BASE_URL="http://localhost:$DRUPAL_PORT" setsid mise x node@16.20.1 -- npx nuxt dev --port "$FRONTEND_DRUXT_PORT" > "$ROOT/test/e2e/reports/nuxt-dev.log" 2>&1 &
+  # The frontend registers its preview target on the e2e consumer when it
+  # starts. The secret goes only through the environment.
+  DRUPAL_BASE_URL="http://localhost:$DRUPAL_PORT" \
+  DRUXT_NODE_PREVIEW_URL="http://localhost:$FRONTEND_DRUXT_PORT" \
+  DRUXT_NODE_PREVIEW_CLIENT_ID=e2e_druxt \
+  DRUXT_NODE_PREVIEW_CLIENT_SECRET="$E2E_CLIENT_SECRET" \
+    setsid mise x node@16.20.1 -- npx nuxt dev --port "$FRONTEND_DRUXT_PORT" > "$ROOT/test/e2e/reports/nuxt-dev.log" 2>&1 &
   PIDS+=($!)
   DRUXT_URL="http://localhost:$FRONTEND_DRUXT_PORT"
 fi

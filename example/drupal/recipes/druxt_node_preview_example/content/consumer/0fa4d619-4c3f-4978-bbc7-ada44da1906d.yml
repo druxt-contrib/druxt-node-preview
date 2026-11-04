@@ -3,10 +3,26 @@ _meta:
   entity_type: consumer
   uuid: 0fa4d619-4c3f-4978-bbc7-ada44da1906d
   default_langcode: en
+  depends:
+    5c1d7e2a-3b4f-4a6c-9d8e-2f1a0b9c8d7e: user
 default:
+  # The client credentials user owns the consumer, so the frontend can
+  # register its own preview target. Set the consumer's secret in its form.
   owner_id:
     -
-      target_id: 1
+      entity: 5c1d7e2a-3b4f-4a6c-9d8e-2f1a0b9c8d7e
+  user_id:
+    -
+      entity: 5c1d7e2a-3b4f-4a6c-9d8e-2f1a0b9c8d7e
+  confidential:
+    -
+      value: true
+  grant_types:
+    -
+      value: client_credentials
+  scopes:
+    -
+      scope_id: preview_targets
   client_id:
     -
       value: example_frontend
@@ -22,10 +38,12 @@ default:
   status:
     -
       value: true
+  # The label is the frontend's host, as a registered target's is by
+  # default. So the frontend finds this target up to date.
   preview_targets:
     -
-      label: Druxt
-      url: 'http://localhost:3000/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]'
+      label: 'localhost:3000'
+      url: 'http://localhost:3000/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]'
   preview_layouts:
     -
       value: default

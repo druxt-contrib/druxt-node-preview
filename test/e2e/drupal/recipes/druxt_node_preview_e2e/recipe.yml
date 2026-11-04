@@ -1,10 +1,13 @@
 name: 'Druxt Node Preview end to end'
-description: 'Sets up the end to end suite backend: Consumer Node Preview, Paragraphs and Druxt, an E2E Article type with a field of Text paragraphs, and an article with two saved paragraphs.'
+description: 'Sets up the end to end suite backend: Consumer Node Preview, Paragraphs, Druxt and Simple OAuth, an E2E Article type with a field of Text paragraphs, an article with two saved paragraphs, and a consumer the Druxt frontend registers its preview target on.'
 type: 'Content type'
 install:
   - consumer_node_preview
   - paragraphs
   - druxt
+  # The Druxt frontend gets a client credentials token to register its
+  # preview target.
+  - simple_oauth
 config:
   # Import only the config the site lacks. The example's recipe runs after
   # this one and brings the same Text paragraph type.

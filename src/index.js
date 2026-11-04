@@ -1,4 +1,5 @@
 import { resolve } from 'path'
+import { registerOnce, registerTarget, resolveRegister } from './register.js'
 
 /**
  * Returns a URL's origin, or null when it is not an http(s) URL.
@@ -103,7 +104,7 @@ const toLayouts = (value) => {
  *
  * The Drupal site points a Consumer Node Preview target at the page:
  *
- *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview]
+ *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]
  *
  * The page renders in the Nuxt layout named by `?layout=`, when that name is
  * in the `layouts` option. Any other name, or none, gives the default layout.
@@ -184,6 +185,26 @@ const NuxtModule = function (moduleOptions = {}) {
   }
   setOrigins()
   if (this.nuxt) this.nuxt.hook('modules:done', setOrigins)
+
+  // Registration is off unless the site sets the register option. It runs
+  // on Nuxt's ready hook, which comes after every module and its
+  // modules:done hook, so druxt.baseUrl is known. Nuxt calls ready in dev,
+  // start, build and generate, and waits for it, so a build does not exit
+  // before the request ends. Each request has a short timeout.
+  const register = resolveRegister(options.register, process.env)
+  if (register && this.nuxt) {
+    this.nuxt.hook('ready', () =>
+      registerOnce(() =>
+        registerTarget({
+          ...register,
+          druxt: (this.options || {}).druxt || {},
+          baseUrl: ((this.options || {}).druxt || {}).baseUrl,
+          path: options.path,
+          layouts: pluginOptions.layouts,
+        })
+      )
+    )
+  }
 
   // Add the plugin that fetches and seeds the preview.
   this.addPlugin({
