@@ -1,6 +1,6 @@
 {
   "name": "@druxt-contrib/node-preview",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Renders Drupal node previews in a Druxt frontend, fed by JSON:API Node Preview and Consumer Node Preview.",
   "keywords": [
     "decoupled",
