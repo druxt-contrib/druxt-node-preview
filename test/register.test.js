@@ -362,3 +362,47 @@ describe('registerOnce', () => {
     interval.mockRestore()
   })
 })
+
+describe('registering on another Drupal site', () => {
+  const env = {
+    DRUXT_NODE_PREVIEW_REGISTER_SECRET: 'theirs',
+    DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours',
+  }
+  const options = {
+    url: 'https://branch.example.com',
+    consumer: 'frontend',
+    backend: 'https://cms.example.com/',
+  }
+
+  test('uses the separate secret, not the one for its own backend', () => {
+    const settings = resolveRegister(options, env)
+    expect(settings.backend).toBe('https://cms.example.com')
+    expect(settings.secret).toBe('theirs')
+  })
+
+  test('registers nothing without the separate secret', () => {
+    expect(
+      resolveRegister(options, { DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours' })
+    ).toBe(null)
+  })
+
+  test('the environment names the backend too', () => {
+    const settings = resolveRegister(
+      { url: options.url, consumer: 'frontend' },
+      {
+        ...env,
+        DRUXT_NODE_PREVIEW_REGISTER_BACKEND: 'https://other.example.com',
+      }
+    )
+    expect(settings.backend).toBe('https://other.example.com')
+  })
+
+  test('the target holds the full endpoint and a token', () => {
+    expect(targetUrl('https://b.example.com', '/p', ['a'], true)).toBe(
+      'https://b.example.com/p?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview];token=[preview_token]'
+    )
+    expect(targetUrl('https://b.example.com', '/p', [])).toBe(
+      'https://b.example.com/p?vm=[view_mode]#[jsonapi_node_preview_path]'
+    )
+  })
+})
