@@ -84,6 +84,7 @@ describe('resolveRegister', () => {
       label: 'env.example.com',
       consumer: 'from-env',
       secret: SECRET,
+      token: false,
     })
   })
 
@@ -107,6 +108,7 @@ describe('resolveRegister', () => {
       label: 'Production',
       consumer: 'frontend',
       secret: SECRET,
+      token: false,
     })
   })
 
@@ -196,6 +198,24 @@ describe('registerTarget', () => {
     expect(JSON.parse(options.body)).toEqual({
       target: { label: 'www.example.com', url: OURS },
     })
+  })
+
+  test('registers the token form, on another site or when asked', async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    await registerTarget(
+      settings({ baseUrl: undefined, backend: 'https://cms.test', token: true })
+    )
+    await registerTarget(settings({ token: true }))
+
+    expect(request.mock.calls[0][1]).toBe('https://cms.test/oauth/token')
+    expect(request.mock.calls[1][1]).toBe(
+      'https://cms.test/api/consumer-node-preview/targets'
+    )
+    for (const call of [1, 3]) {
+      expect(JSON.parse(request.mock.calls[call][2].body).target.url).toBe(
+        'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview];token=[preview_token]'
+      )
+    }
   })
 
   test('sends the layouts once each, when the site lists them', async () => {
@@ -403,6 +423,44 @@ describe('registering on another Drupal site', () => {
     )
     expect(targetUrl('https://b.example.com', '/p', [])).toBe(
       'https://b.example.com/p?vm=[view_mode]#[jsonapi_node_preview_path]'
+    )
+  })
+})
+
+describe('the token option', () => {
+  const env = { DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours' }
+  const options = { url: 'https://www.example.com', consumer: 'frontend' }
+
+  test('is off for druxt.baseUrl, and on for another site', () => {
+    expect(resolveRegister(options, env).token).toBe(false)
+    expect(
+      resolveRegister(
+        { ...options, backend: 'https://cms.example.com' },
+        { DRUXT_NODE_PREVIEW_REGISTER_SECRET: 'theirs' }
+      ).token
+    ).toBe(true)
+  })
+
+  test('takes a boolean option, or true or false from the environment', () => {
+    expect(resolveRegister({ ...options, token: true }, env).token).toBe(true)
+    expect(
+      resolveRegister(
+        { ...options, token: true },
+        { ...env, DRUXT_NODE_PREVIEW_REGISTER_TOKEN: 'false' }
+      ).token
+    ).toBe(false)
+    expect(
+      resolveRegister(options, {
+        ...env,
+        DRUXT_NODE_PREVIEW_REGISTER_TOKEN: '1',
+      }).token
+    ).toBe(true)
+  })
+
+  test('registers nothing for a value that is not true or false', () => {
+    expect(resolveRegister({ ...options, token: 'yes' }, env)).toBe(null)
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('register.token must be true or false')
     )
   })
 })

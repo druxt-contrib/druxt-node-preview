@@ -63,11 +63,15 @@ const toBaseUrl = (value) => {
  * DRUXT_NODE_PREVIEW_REGISTER_SECRET, so a frontend never sends its own
  * backend's secret to another site.
  *
+ * DRUXT_NODE_PREVIEW_REGISTER_TOKEN, or `token`, says whether the target
+ * reads the preview with a token instead of the editor's session. It is on
+ * with a backend, and off otherwise.
+ *
  * @param {*} value - The `register` option.
  * @param {object} env - The environment, such as process.env.
  *
- * @returns {object|null} The url, label, consumer and secret, and the
- *   backend when there is one.
+ * @returns {object|null} The url, label, consumer, secret and token, and
+ *   the backend when there is one.
  */
 export const resolveRegister = (value, env) => {
   if (value === undefined || value === null || value === false) return null
@@ -95,6 +99,13 @@ export const resolveRegister = (value, env) => {
     : 'DRUXT_NODE_PREVIEW_CLIENT_SECRET'
   const secret = fromEnv(env, secretName)
 
+  const envToken = fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_TOKEN')
+  const rawToken = envToken !== undefined ? envToken : options.token
+  const token =
+    rawToken === undefined
+      ? Boolean(backend)
+      : { true: true, 1: true, false: false, 0: false }[String(rawToken)]
+
   const problems = [
     !url &&
       "DRUXT_NODE_PREVIEW_URL or register.url must be the frontend's full http(s) URL, with no query or fragment.",
@@ -103,6 +114,8 @@ export const resolveRegister = (value, env) => {
     rawBackend &&
       !backend &&
       "DRUXT_NODE_PREVIEW_REGISTER_BACKEND or register.backend must be the Drupal site's full http(s) URL.",
+    token === undefined &&
+      'DRUXT_NODE_PREVIEW_REGISTER_TOKEN or register.token must be true or false.',
     !secret &&
       `${secretName} must be the consumer's secret, in the environment that runs Nuxt.`,
   ].filter(Boolean)
@@ -117,7 +130,14 @@ export const resolveRegister = (value, env) => {
     (typeof options.label === 'string' && options.label.trim()) ||
     new URL(url).host
 
-  return { url, label, consumer, secret, ...(backend ? { backend } : {}) }
+  return {
+    url,
+    label,
+    consumer,
+    secret,
+    token,
+    ...(backend ? { backend } : {}),
+  }
 }
 
 /**
@@ -131,19 +151,19 @@ export const resolveRegister = (value, env) => {
  * @param {string} url - The frontend's base URL.
  * @param {string} path - The preview page's path.
  * @param {string[]} layouts - The layouts option.
- * @param {boolean} [elsewhere] - Whether the target is on a Drupal site other
- *   than druxt.baseUrl. A path would name the wrong site, and the editor's
- *   session doesn't reach this frontend, so the fragment holds the endpoint's
- *   full URL and a token to read it with.
+ * @param {boolean} [token] - Whether the preview reads with a token, for an
+ *   editor whose session doesn't reach this frontend. The fragment then holds
+ *   the endpoint's full URL and the token. A path would name the wrong site
+ *   when the target is on a Drupal site other than druxt.baseUrl.
  *
  * @returns {string} The URL template.
  */
-export const targetUrl = (url, path, layouts, elsewhere = false) =>
+export const targetUrl = (url, path, layouts, token = false) =>
   url +
   path +
   '?vm=[view_mode]' +
   (layouts.length ? '&layout=[layout]' : '') +
-  (elsewhere
+  (token
     ? '#[jsonapi_node_preview];token=[preview_token]'
     : '#[jsonapi_node_preview_path]')
 
@@ -219,6 +239,7 @@ const send = async (client, config, hints) => {
 export const registerTarget = async ({
   baseUrl,
   backend,
+  token: useToken,
   druxt = {},
   url,
   label,
@@ -280,7 +301,7 @@ export const registerTarget = async ({
         data: {
           target: {
             label,
-            url: targetUrl(url, path, layouts, Boolean(backend)),
+            url: targetUrl(url, path, layouts, Boolean(useToken)),
           },
           ...(layouts.length ? { layouts: [...new Set(layouts)] } : {}),
         },
