@@ -10,13 +10,16 @@ import { DruxtClient } from 'druxt'
  * sends the PATCH again on a timer, so a running frontend's target stays active.
  *
  * Every request goes through a DruxtClient, so the site's `druxt.axios` options
- * apply, but a backend gets none of their headers or auth. No request follows
- * a redirect, so the secret never goes to another host. A failure never stops
- * Nuxt, and no message holds the secret or the token.
+ * apply, but a backend gets only their timeout and proxy, and no credentials
+ * from the global axios defaults. No request follows a redirect, so the secret
+ * never goes to another host. A failure never stops Nuxt, and no message holds
+ * the secret or the token.
  */
 
 const PREFIX = '[druxt-node-preview] '
 const TIMEOUT = 5000
+// The headers that carry a credential for druxt.baseUrl.
+const CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization']
 
 /**
  * The time between registrations, in milliseconds. Consumer Node Preview marks
@@ -205,6 +208,26 @@ const reason = (data) => {
 }
 
 /**
+ * Removes the credentials that axios copies from its global defaults.
+ *
+ * A new axios instance starts with the global headers, auth and params. They
+ * are for druxt.baseUrl, so a register backend must not get them.
+ *
+ * @param {object} defaults - The axios instance's defaults.
+ */
+const withoutCredentials = (defaults) => {
+  delete defaults.auth
+  delete defaults.params
+  const headers = defaults.headers || {}
+  for (const set of [headers, ...Object.values(headers)]) {
+    if (!set || typeof set !== 'object') continue
+    for (const name of Object.keys(set)) {
+      if (CREDENTIAL_HEADERS.includes(name.toLowerCase())) delete set[name]
+    }
+  }
+}
+
+/**
  * Sends a request, and returns the data of a 200 response.
  *
  * @param {object} client - The DruxtClient.
@@ -267,12 +290,12 @@ export const registerTarget = async ({
         `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
       )
     }
-    // The site's headers and auth are for druxt.baseUrl, so a backend gets
-    // none of them.
+    // The site's axios options are for druxt.baseUrl, so a backend gets only
+    // the timeout and proxy.
     const axios = backend
       ? Object.fromEntries(
-          Object.entries(druxt.axios || {}).filter(
-            ([name]) => !['headers', 'auth', 'withCredentials'].includes(name)
+          Object.entries(druxt.axios || {}).filter(([name]) =>
+            ['timeout', 'proxy'].includes(name)
           )
         )
       : druxt.axios
@@ -280,6 +303,7 @@ export const registerTarget = async ({
       ...druxt,
       axios: { timeout: TIMEOUT, ...axios },
     })
+    if (backend) withoutCredentials(client.axios.defaults)
 
     const answer = await send(
       client,

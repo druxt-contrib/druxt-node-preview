@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { DruxtClient } from 'druxt'
 import {
   HEARTBEAT,
@@ -257,6 +258,45 @@ describe('registerTarget', () => {
     expect(defaults.headers.Authorization).toBeUndefined()
     expect(defaults.auth).toBeUndefined()
     expect(defaults.withCredentials).toBeFalsy()
+  })
+
+  test('a backend gets only the timeout and proxy of the site', async () => {
+    answer(tokenOk(), saved())
+    const proxy = { host: 'proxy.example.com', port: 3128 }
+    const druxt = {
+      baseUrl: BASE,
+      axios: { timeout: 60000, proxy, params: { api_key: 'site' } },
+    }
+    await registerTarget(
+      settings({ backend: 'https://other.example.com', token: true, druxt })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.proxy).toEqual(proxy)
+    expect(defaults.params).toBeUndefined()
+  })
+
+  test('a backend gets no credentials from the global axios', async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    axios.defaults.headers.common.Authorization = 'Basic Z2xvYmFs'
+    axios.defaults.headers.patch.Cookie = 'SESS=site'
+    axios.defaults.params = { api_key: 'site' }
+    try {
+      await registerTarget(
+        settings({ backend: 'https://other.example.com', token: true })
+      )
+      await registerTarget(settings())
+    } finally {
+      delete axios.defaults.headers.common.Authorization
+      delete axios.defaults.headers.patch.Cookie
+      delete axios.defaults.params
+    }
+    const [backend, site] = clients.map(({ axios }) => axios.defaults)
+    expect(backend.headers.common.Authorization).toBeUndefined()
+    expect(backend.headers.patch.Cookie).toBeUndefined()
+    expect(backend.params).toBeUndefined()
+    // druxt.baseUrl keeps what axios gives it.
+    expect(site.headers.common.Authorization).toBe('Basic Z2xvYmFs')
   })
 
   test('no request follows a redirect, and every status comes back', async () => {
