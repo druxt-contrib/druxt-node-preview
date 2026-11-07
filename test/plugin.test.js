@@ -222,6 +222,34 @@ describe('$druxtNodePreview plugin', () => {
     expect(result).toBe(doc)
   })
 
+  test('fetch with a token sends it as a bearer token, without credentials', async () => {
+    const doc = { data: { type: 'node--article', id: UUID } }
+    window.location.hash = `#${ENDPOINT};token=cnpt.a.b`
+
+    const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
+    const client = buildPlugin({ $druxt: { axios: { get } } }).injected
+    await client.value.fetch(ENDPOINT)
+    expect(get).toHaveBeenCalledWith(
+      `${ENDPOINT}?include=field_body`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer cnpt.a.b' }),
+        withCredentials: false,
+      })
+    )
+
+    window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
+    await buildPlugin().injected.value.fetch(ENDPOINT)
+    expect(window.fetch).toHaveBeenCalledWith(
+      `${ENDPOINT}?include=field_body`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer cnpt.a.b' }),
+        credentials: 'omit',
+      })
+    )
+
+    window.location.hash = ''
+  })
+
   test('endpoint repairs a scheme the router collapsed', () => {
     const { injected } = buildPlugin()
     window.location.hash =

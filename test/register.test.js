@@ -463,4 +463,18 @@ describe('the token option', () => {
       expect.stringContaining('register.token must be true or false')
     )
   })
+
+  // An object lookup would find these on Object.prototype.
+  test.each(['toString', 'constructor', '__proto__'])(
+    'registers nothing for %s',
+    (value) => {
+      expect(resolveRegister({ ...options, token: value }, env)).toBe(null)
+      expect(
+        resolveRegister(options, {
+          ...env,
+          DRUXT_NODE_PREVIEW_REGISTER_TOKEN: value,
+        })
+      ).toBe(null)
+    }
+  )
 })

@@ -104,7 +104,12 @@ export const resolveRegister = (value, env) => {
   const token =
     rawToken === undefined
       ? Boolean(backend)
-      : { true: true, 1: true, false: false, 0: false }[String(rawToken)]
+      : new Map([
+          ['true', true],
+          ['1', true],
+          ['false', false],
+          ['0', false],
+        ]).get(String(rawToken))
 
   const problems = [
     !url &&
