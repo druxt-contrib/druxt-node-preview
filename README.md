@@ -255,8 +255,9 @@ each keep their own target on one consumer. Frontends that share a label
 replace each other's target.
 
 The module sends each request with a `DruxtClient` from Druxt, so the site's
-`druxt.axios` options, such as its headers, apply. It never follows a
-redirect, so the secret goes only to `druxt.baseUrl`.
+`druxt.axios` options, such as its headers, apply. A `backend` gets none of
+the `druxt.axios` headers or auth, because they are for `druxt.baseUrl`. It
+never follows a redirect, so the secret goes only to the site it names.
 
 To read the targets back, send the consumer's client ID in the
 `X-Consumer-ID` header, or put `?consumerId=<client id>` or

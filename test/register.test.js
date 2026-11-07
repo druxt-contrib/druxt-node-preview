@@ -238,6 +238,27 @@ describe('registerTarget', () => {
     expect(clients[1].axios.defaults.timeout).toBe(60000)
   })
 
+  test('sends no site credentials to a backend', async () => {
+    answer(tokenOk(), saved())
+    const druxt = {
+      baseUrl: BASE,
+      axios: {
+        timeout: 60000,
+        headers: { Authorization: 'Basic c2l0ZQ==' },
+        auth: { username: 'site', password: 'site' },
+        withCredentials: true,
+      },
+    }
+    await registerTarget(
+      settings({ backend: 'https://other.example.com', token: true, druxt })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.headers.Authorization).toBeUndefined()
+    expect(defaults.auth).toBeUndefined()
+    expect(defaults.withCredentials).toBeFalsy()
+  })
+
   test('no request follows a redirect, and every status comes back', async () => {
     answer(tokenOk(), saved())
     await registerTarget(settings())

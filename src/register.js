@@ -10,8 +10,9 @@ import { DruxtClient } from 'druxt'
  * sends the PATCH again on a timer, so a running frontend's target stays active.
  *
  * Every request goes through a DruxtClient, so the site's `druxt.axios` options
- * apply. No request follows a redirect, so the secret never goes to another
- * host. A failure never stops Nuxt, and no message holds the secret or the token.
+ * apply, but a backend gets none of their headers or auth. No request follows
+ * a redirect, so the secret never goes to another host. A failure never stops
+ * Nuxt, and no message holds the secret or the token.
  */
 
 const PREFIX = '[druxt-node-preview] '
@@ -266,9 +267,18 @@ export const registerTarget = async ({
         `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
       )
     }
+    // The site's headers and auth are for druxt.baseUrl, so a backend gets
+    // none of them.
+    const axios = backend
+      ? Object.fromEntries(
+          Object.entries(druxt.axios || {}).filter(
+            ([name]) => !['headers', 'auth', 'withCredentials'].includes(name)
+          )
+        )
+      : druxt.axios
     const client = new DruxtClient(base, {
       ...druxt,
-      axios: { timeout: TIMEOUT, ...druxt.axios },
+      axios: { timeout: TIMEOUT, ...axios },
     })
 
     const answer = await send(
