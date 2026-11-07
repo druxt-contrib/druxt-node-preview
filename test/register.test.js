@@ -84,6 +84,7 @@ describe('resolveRegister', () => {
       label: 'env.example.com',
       consumer: 'from-env',
       secret: SECRET,
+      token: false,
     })
   })
 
@@ -107,6 +108,7 @@ describe('resolveRegister', () => {
       label: 'Production',
       consumer: 'frontend',
       secret: SECRET,
+      token: false,
     })
   })
 
@@ -196,6 +198,24 @@ describe('registerTarget', () => {
     expect(JSON.parse(options.body)).toEqual({
       target: { label: 'www.example.com', url: OURS },
     })
+  })
+
+  test('registers the token form, on another site or when asked', async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    await registerTarget(
+      settings({ baseUrl: undefined, backend: 'https://cms.test', token: true })
+    )
+    await registerTarget(settings({ token: true }))
+
+    expect(request.mock.calls[0][1]).toBe('https://cms.test/oauth/token')
+    expect(request.mock.calls[1][1]).toBe(
+      'https://cms.test/api/consumer-node-preview/targets'
+    )
+    for (const call of [1, 3]) {
+      expect(JSON.parse(request.mock.calls[call][2].body).target.url).toBe(
+        'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview];token=[preview_token]'
+      )
+    }
   })
 
   test('sends the layouts once each, when the site lists them', async () => {
@@ -361,4 +381,100 @@ describe('registerOnce', () => {
     expect(unref).toHaveBeenCalledTimes(1)
     interval.mockRestore()
   })
+})
+
+describe('registering on another Drupal site', () => {
+  const env = {
+    DRUXT_NODE_PREVIEW_REGISTER_SECRET: 'theirs',
+    DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours',
+  }
+  const options = {
+    url: 'https://branch.example.com',
+    consumer: 'frontend',
+    backend: 'https://cms.example.com/',
+  }
+
+  test('uses the separate secret, not the one for its own backend', () => {
+    const settings = resolveRegister(options, env)
+    expect(settings.backend).toBe('https://cms.example.com')
+    expect(settings.secret).toBe('theirs')
+  })
+
+  test('registers nothing without the separate secret', () => {
+    expect(
+      resolveRegister(options, { DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours' })
+    ).toBe(null)
+  })
+
+  test('the environment names the backend too', () => {
+    const settings = resolveRegister(
+      { url: options.url, consumer: 'frontend' },
+      {
+        ...env,
+        DRUXT_NODE_PREVIEW_REGISTER_BACKEND: 'https://other.example.com',
+      }
+    )
+    expect(settings.backend).toBe('https://other.example.com')
+  })
+
+  test('the target holds the full endpoint and a token', () => {
+    expect(targetUrl('https://b.example.com', '/p', ['a'], true)).toBe(
+      'https://b.example.com/p?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview];token=[preview_token]'
+    )
+    expect(targetUrl('https://b.example.com', '/p', [])).toBe(
+      'https://b.example.com/p?vm=[view_mode]#[jsonapi_node_preview_path]'
+    )
+  })
+})
+
+describe('the token option', () => {
+  const env = { DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours' }
+  const options = { url: 'https://www.example.com', consumer: 'frontend' }
+
+  test('is off for druxt.baseUrl, and on for another site', () => {
+    expect(resolveRegister(options, env).token).toBe(false)
+    expect(
+      resolveRegister(
+        { ...options, backend: 'https://cms.example.com' },
+        { DRUXT_NODE_PREVIEW_REGISTER_SECRET: 'theirs' }
+      ).token
+    ).toBe(true)
+  })
+
+  test('takes a boolean option, or true or false from the environment', () => {
+    expect(resolveRegister({ ...options, token: true }, env).token).toBe(true)
+    expect(
+      resolveRegister(
+        { ...options, token: true },
+        { ...env, DRUXT_NODE_PREVIEW_REGISTER_TOKEN: 'false' }
+      ).token
+    ).toBe(false)
+    expect(
+      resolveRegister(options, {
+        ...env,
+        DRUXT_NODE_PREVIEW_REGISTER_TOKEN: '1',
+      }).token
+    ).toBe(true)
+  })
+
+  test('registers nothing for a value that is not true or false', () => {
+    expect(resolveRegister({ ...options, token: 'yes' }, env)).toBe(null)
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('register.token must be true or false')
+    )
+  })
+
+  // An object lookup would find these on Object.prototype.
+  test.each(['toString', 'constructor', '__proto__'])(
+    'registers nothing for %s',
+    (value) => {
+      expect(resolveRegister({ ...options, token: value }, env)).toBe(null)
+      expect(
+        resolveRegister(options, {
+          ...env,
+          DRUXT_NODE_PREVIEW_REGISTER_TOKEN: value,
+        })
+      ).toBe(null)
+    }
+  )
 })

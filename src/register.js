@@ -58,10 +58,20 @@ const toBaseUrl = (value) => {
  * The environment wins over the options, so one nuxt.config.js serves each
  * environment. The secret comes only from the environment.
  *
+ * DRUXT_NODE_PREVIEW_REGISTER_BACKEND, or `backend`, is a Drupal site other
+ * than druxt.baseUrl to register on. Its secret is the separate
+ * DRUXT_NODE_PREVIEW_REGISTER_SECRET, so a frontend never sends its own
+ * backend's secret to another site.
+ *
+ * DRUXT_NODE_PREVIEW_REGISTER_TOKEN, or `token`, says whether the target
+ * reads the preview with a token instead of the editor's session. It is on
+ * with a backend, and off otherwise.
+ *
  * @param {*} value - The `register` option.
  * @param {object} env - The environment, such as process.env.
  *
- * @returns {object|null} The url, label, consumer and secret.
+ * @returns {object|null} The url, label, consumer, secret and token, and
+ *   the backend when there is one.
  */
 export const resolveRegister = (value, env) => {
   if (value === undefined || value === null || value === false) return null
@@ -81,15 +91,38 @@ export const resolveRegister = (value, env) => {
   const url = toBaseUrl(fromEnv(env, 'DRUXT_NODE_PREVIEW_URL') || options.url)
   const consumer =
     fromEnv(env, 'DRUXT_NODE_PREVIEW_CLIENT_ID') || options.consumer
-  const secret = fromEnv(env, 'DRUXT_NODE_PREVIEW_CLIENT_SECRET')
+  const rawBackend =
+    fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_BACKEND') || options.backend
+  const backend = rawBackend ? toBaseUrl(rawBackend) : null
+  const secretName = rawBackend
+    ? 'DRUXT_NODE_PREVIEW_REGISTER_SECRET'
+    : 'DRUXT_NODE_PREVIEW_CLIENT_SECRET'
+  const secret = fromEnv(env, secretName)
+
+  const envToken = fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_TOKEN')
+  const rawToken = envToken !== undefined ? envToken : options.token
+  const token =
+    rawToken === undefined
+      ? Boolean(backend)
+      : new Map([
+          ['true', true],
+          ['1', true],
+          ['false', false],
+          ['0', false],
+        ]).get(String(rawToken))
 
   const problems = [
     !url &&
       "DRUXT_NODE_PREVIEW_URL or register.url must be the frontend's full http(s) URL, with no query or fragment.",
     (typeof consumer !== 'string' || !/^[\x21-\x7e]+$/.test(consumer)) &&
       "DRUXT_NODE_PREVIEW_CLIENT_ID or register.consumer must be the consumer's client ID.",
+    rawBackend &&
+      !backend &&
+      "DRUXT_NODE_PREVIEW_REGISTER_BACKEND or register.backend must be the Drupal site's full http(s) URL.",
+    token === undefined &&
+      'DRUXT_NODE_PREVIEW_REGISTER_TOKEN or register.token must be true or false.',
     !secret &&
-      "DRUXT_NODE_PREVIEW_CLIENT_SECRET must be the consumer's secret, in the environment that runs Nuxt.",
+      `${secretName} must be the consumer's secret, in the environment that runs Nuxt.`,
   ].filter(Boolean)
   if (problems.length) {
     warn(`Ignored the register option. ${problems.join(' ')}`)
@@ -102,7 +135,14 @@ export const resolveRegister = (value, env) => {
     (typeof options.label === 'string' && options.label.trim()) ||
     new URL(url).host
 
-  return { url, label, consumer, secret }
+  return {
+    url,
+    label,
+    consumer,
+    secret,
+    token,
+    ...(backend ? { backend } : {}),
+  }
 }
 
 /**
@@ -116,15 +156,21 @@ export const resolveRegister = (value, env) => {
  * @param {string} url - The frontend's base URL.
  * @param {string} path - The preview page's path.
  * @param {string[]} layouts - The layouts option.
+ * @param {boolean} [token] - Whether the preview reads with a token, for an
+ *   editor whose session doesn't reach this frontend. The fragment then holds
+ *   the endpoint's full URL and the token. A path would name the wrong site
+ *   when the target is on a Drupal site other than druxt.baseUrl.
  *
  * @returns {string} The URL template.
  */
-export const targetUrl = (url, path, layouts) =>
+export const targetUrl = (url, path, layouts, token = false) =>
   url +
   path +
   '?vm=[view_mode]' +
   (layouts.length ? '&layout=[layout]' : '') +
-  '#[jsonapi_node_preview_path]'
+  (token
+    ? '#[jsonapi_node_preview];token=[preview_token]'
+    : '#[jsonapi_node_preview_path]')
 
 const CREDENTIALS =
   'Check the secret, and that the consumer is confidential, allows the Client credentials grant, and has a Client credentials user.'
@@ -190,12 +236,15 @@ const send = async (client, config, hints) => {
  * It never throws. A failure prints a warning.
  *
  * @param {object} settings - The settings from resolveRegister(), with the
- *   baseUrl and druxt options, and the path and layouts options.
+ *   baseUrl and druxt options, and the path and layouts options. A backend
+ *   wins over baseUrl.
  *
  * @returns {Promise<string>} "registered" or "failed".
  */
 export const registerTarget = async ({
   baseUrl,
+  backend,
+  token: useToken,
   druxt = {},
   url,
   label,
@@ -206,15 +255,15 @@ export const registerTarget = async ({
 }) => {
   let token
   try {
-    if (!baseUrl) throw new Error('druxt.baseUrl is not set.')
-    const base = baseUrl.replace(/\/+$/, '')
+    if (!backend && !baseUrl) throw new Error('druxt.baseUrl is not set.')
+    const base = (backend || baseUrl).replace(/\/+$/, '')
     const { protocol, hostname } = new URL(base)
     if (
       protocol === 'http:' &&
       !/^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$|\.localhost$/.test(hostname)
     ) {
       warn(
-        'druxt.baseUrl uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.'
+        `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
       )
     }
     const client = new DruxtClient(base, {
@@ -255,7 +304,10 @@ export const registerTarget = async ({
         },
         // Without layouts, Drupal keeps the consumer's own.
         data: {
-          target: { label, url: targetUrl(url, path, layouts) },
+          target: {
+            label,
+            url: targetUrl(url, path, layouts, Boolean(useToken)),
+          },
           ...(layouts.length ? { layouts: [...new Set(layouts)] } : {}),
         },
       },

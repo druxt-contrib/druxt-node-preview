@@ -150,6 +150,8 @@ const NuxtModule = function (moduleOptions = {}) {
     })
   })
 
+  const register = resolveRegister(options.register, process.env)
+
   // An origin the site lists must be a full http(s) URL. Say so, rather than
   // leave the site to find out from a refused preview.
   if (!Array.isArray(options.origins)) {
@@ -180,7 +182,11 @@ const NuxtModule = function (moduleOptions = {}) {
   const setOrigins = () => {
     const baseUrl = ((this.options || {}).druxt || {}).baseUrl
     pluginOptions.origins = [
-      ...new Set([baseUrl, ...listed].map(toOrigin).filter(Boolean)),
+      ...new Set(
+        [baseUrl, register && register.backend, ...listed]
+          .map(toOrigin)
+          .filter(Boolean)
+      ),
     ]
   }
   setOrigins()
@@ -191,7 +197,6 @@ const NuxtModule = function (moduleOptions = {}) {
   // modules:done hook, so druxt.baseUrl is known. Nuxt calls ready in dev,
   // start, build and generate, and waits for it, so a build does not exit
   // before the request ends. Each request has a short timeout.
-  const register = resolveRegister(options.register, process.env)
   if (register && this.nuxt) {
     this.nuxt.hook('ready', () =>
       registerOnce(() =>

@@ -69,6 +69,7 @@ const buildPlugin = (app = {}, include = undefined) => {
   return { commits, injected, modules }
 }
 
+// cspell:ignore cnpt
 describe('$druxtNodePreview plugin', () => {
   test('injects the plugin', () => {
     const { injected } = buildPlugin()
@@ -97,6 +98,19 @@ describe('$druxtNodePreview plugin', () => {
     )
     window.location.hash = ''
     expect(injected.value.endpoint()).toBe(null)
+  })
+
+  test('a token in the fragment is not part of the endpoint', () => {
+    const { injected } = buildPlugin()
+    window.location.hash =
+      '#https://example.com/jsonapi/node/article/abc/preview;token=cnpt.a.b'
+    expect(injected.value.endpoint()).toBe(
+      'https://example.com/jsonapi/node/article/abc/preview'
+    )
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    window.location.hash = '#/jsonapi/node/article/abc/preview'
+    expect(injected.value.token()).toBe(null)
+    window.location.hash = ''
   })
 
   test('registers the preview store module', () => {
@@ -206,6 +220,34 @@ describe('$druxtNodePreview plugin', () => {
       expect.objectContaining({ credentials: 'include' })
     )
     expect(result).toBe(doc)
+  })
+
+  test('fetch with a token sends it as a bearer token, without credentials', async () => {
+    const doc = { data: { type: 'node--article', id: UUID } }
+    window.location.hash = `#${ENDPOINT};token=cnpt.a.b`
+
+    const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
+    const client = buildPlugin({ $druxt: { axios: { get } } }).injected
+    await client.value.fetch(ENDPOINT)
+    expect(get).toHaveBeenCalledWith(
+      `${ENDPOINT}?include=field_body`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer cnpt.a.b' }),
+        withCredentials: false,
+      })
+    )
+
+    window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
+    await buildPlugin().injected.value.fetch(ENDPOINT)
+    expect(window.fetch).toHaveBeenCalledWith(
+      `${ENDPOINT}?include=field_body`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer cnpt.a.b' }),
+        credentials: 'omit',
+      })
+    )
+
+    window.location.hash = ''
   })
 
   test('endpoint repairs a scheme the router collapsed', () => {
