@@ -16,8 +16,8 @@ const loadPlugin = (include = ['field_body']) => {
       '\'["https://example.com","https://backend.example.com"]\''
     )
     .replace(
-      "'<%= JSON.stringify(options.backends) %>'",
-      '\'["https://backend.example.com"]\''
+      "'<%= JSON.stringify(options.drupal) %>'",
+      '\'"https://example.com"\''
     )
     .replace(
       "'<%= JSON.stringify(options.layouts) %>'",
@@ -241,6 +241,9 @@ describe('$druxtNodePreview plugin', () => {
       })
     )
 
+    // The first page took the token out of the address. A new page load gets
+    // it again from Drupal.
+    window.location.hash = `#${ENDPOINT};token=cnpt.a.b`
     window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
     await buildPlugin().injected.value.fetch(ENDPOINT)
     expect(window.fetch).toHaveBeenCalledWith(
@@ -294,6 +297,42 @@ describe('$druxtNodePreview plugin', () => {
       },
     })
 
+    window.location.hash = ''
+  })
+
+  test('a listed origin goes without the Druxt client, with the session', async () => {
+    const doc = { data: { type: 'node--article', id: UUID } }
+    const other = `https://backend.example.com/jsonapi/node/article/${UUID}/preview`
+    const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
+    window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch(other)
+
+    expect(get).not.toHaveBeenCalled()
+    expect(window.fetch).toHaveBeenCalledWith(
+      `${other}?include=field_body`,
+      expect.objectContaining({ credentials: 'include' })
+    )
+  })
+
+  test('the token leaves the address once the page has read it', () => {
+    const { injected } = buildPlugin()
+    window.history.replaceState(
+      { key: 'kept' },
+      '',
+      `/druxt/node/preview?vm=full#${ENDPOINT};token=cnpt.a.b`
+    )
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    expect(window.location.search).toBe('?vm=full')
+    expect(window.history.state).toEqual({ key: 'kept' })
+    // The page reads it again when it comes back, such as after keep-alive.
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.endpoint()).toBe(ENDPOINT)
+
+    // A new preview address brings its own token, or none.
+    window.location.hash = `#/jsonapi/node/article/${UUID}/preview`
+    expect(injected.value.token()).toBe(null)
     window.location.hash = ''
   })
 

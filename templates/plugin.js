@@ -14,13 +14,17 @@
 export default ({ app, store }, inject) => {
   const include = JSON.parse('<%= JSON.stringify(options.include) %>')
   const layouts = JSON.parse('<%= JSON.stringify(options.layouts) %>')
-  // Origins the preview may come from, besides this site's own.
+  // Origins the preview may come from, besides this site's own. The module
+  // only passes origins with plain host names, so none can end the string.
   const origins = JSON.parse('<%= JSON.stringify(options.origins) %>')
-  // Register backends, which the page fetches from without the Druxt client.
-  const backends = JSON.parse('<%= JSON.stringify(options.backends) %>')
+  // Druxt's Drupal origin. The page fetches from any other origin without the
+  // Druxt client, whose options are for druxt.baseUrl.
+  const drupal = JSON.parse('<%= JSON.stringify(options.drupal) %>')
 
   // Separates the endpoint from a token in the URL fragment.
   const TOKEN_MARK = ';token='
+  // The token, once read and taken out of the address, and its endpoint.
+  let kept = null
 
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
@@ -271,10 +275,22 @@ export default ({ app, store }, inject) => {
      * @returns {string|null} The token, or null when the preview reads with
      *   the editor's session.
      */
-    token: () =>
-      decodeURIComponent((window.location.hash || '').slice(1)).split(
-        TOKEN_MARK
-      )[1] || null,
+    token: () => {
+      const raw = (window.location.hash || '').slice(1)
+      const [endpoint, token] = decodeURIComponent(raw).split(TOKEN_MARK)
+      if (token) {
+        kept = { endpoint, token }
+        // An error tracker or session recorder on the page can log the
+        // address. So the token leaves it, and the page keeps it here.
+        window.history.replaceState(
+          window.history.state,
+          '',
+          window.location.pathname + window.location.search + '#' + endpoint
+        )
+        return token
+      }
+      return kept && kept.endpoint === endpoint ? kept.token : null
+    },
 
     /**
      * Fetches the preview document with the editor's session, or with the
@@ -300,9 +316,10 @@ export default ({ app, store }, inject) => {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       }
       // The Druxt client's defaults, such as its auth, are for druxt.baseUrl.
-      // A backend gets a plain request instead.
+      // Any other origin gets a plain request instead.
       const { origin } = new URL(url, window.location.origin)
-      const client = backends.includes(origin) ? null : (app.$druxt || {}).axios
+      const own = origin === window.location.origin || origin === drupal
+      const client = own ? (app.$druxt || {}).axios : null
       if (client) {
         let response
         try {

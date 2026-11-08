@@ -138,7 +138,10 @@ include: { 'node--page': ['field_content.field_media'] }
 ```
 
 **origins.** Any link can put an address in the page's URL. So the page only
-fetches from this site, from `druxt.baseUrl`, and from `origins`.
+fetches from this site, from `druxt.baseUrl`, and from `origins`. A request to
+an origin in `origins` goes without the Druxt client, whose headers and auth
+are for `druxt.baseUrl`. An origin whose host has characters other than
+letters, digits, dots and hyphens is ignored.
 
 A value the module cannot use shows a warning in the build output, and the
 module ignores it.

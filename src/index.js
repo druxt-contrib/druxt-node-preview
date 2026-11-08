@@ -9,14 +9,21 @@ import {
 /**
  * Returns a URL's origin, or null when it is not an http(s) URL.
  *
+ * The URL parser lets a host name hold characters such as quotes and
+ * brackets. The origin goes into the page's script, so its host must be plain:
+ * letters, digits, dots and hyphens, or an IPv6 address in brackets.
+ *
  * @param {*} url - The URL.
  *
  * @returns {string|null} The origin.
  */
 const toOrigin = (url) => {
   try {
-    const { origin, protocol } = new URL(url)
-    return ['http:', 'https:'].includes(protocol) ? origin : null
+    const { origin, protocol, hostname } = new URL(url)
+    const plain = /^([a-z0-9-]+\.)*[a-z0-9-]+$|^\[[0-9a-f:.]+\]$/
+    return ['http:', 'https:'].includes(protocol) && plain.test(hostname)
+      ? origin
+      : null
   } catch {
     return null
   }
@@ -178,9 +185,9 @@ const NuxtModule = function (moduleOptions = {}) {
   const pluginOptions = {
     include: toInclude(options.include),
     origins: [],
-    // The page fetches from these without the Druxt client, whose options are
-    // for druxt.baseUrl.
-    backends: backend ? [toOrigin(backend)] : [],
+    // Druxt's Drupal origin. The page fetches from any other origin without
+    // the Druxt client, whose options are for druxt.baseUrl.
+    drupal: null,
     layouts: toLayouts(options.layouts),
   }
 
@@ -190,6 +197,7 @@ const NuxtModule = function (moduleOptions = {}) {
   // read again once every module has run. The template reads them at build.
   const setOrigins = () => {
     const baseUrl = ((this.options || {}).druxt || {}).baseUrl
+    pluginOptions.drupal = toOrigin(baseUrl)
     pluginOptions.origins = [
       ...new Set([baseUrl, backend, ...listed].map(toOrigin).filter(Boolean)),
     ]

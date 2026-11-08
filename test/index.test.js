@@ -53,7 +53,7 @@ describe('DruxtNodePreview module', () => {
     expect(context.routes[0].name).toBe('druxt-node-preview')
     expect(context.addedPlugins[0].options.include).toEqual([])
     expect(context.addedPlugins[0].options.origins).toEqual([])
-    expect(context.addedPlugins[0].options.backends).toEqual([])
+    expect(context.addedPlugins[0].options.drupal).toBe(null)
     expect(context.addedPlugins[0].options.layouts).toEqual([])
   })
 
@@ -125,6 +125,32 @@ describe('DruxtNodePreview module', () => {
     expect(context.addedPlugins[0].options.origins).toEqual([
       'https://late.example.com',
     ])
+    expect(context.addedPlugins[0].options.drupal).toBe(
+      'https://late.example.com'
+    )
+  })
+
+  test('an origin whose host has other characters is refused', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({
+      baseUrl: "https://x'+alert(1)+'.example",
+      nodePreview: {
+        origins: [
+          "https://y'+alert(2)+'.example",
+          'https://cms.example.com:8443',
+          'http://[::1]:3000',
+        ],
+      },
+    })
+    NuxtModule.call(context)
+    const { options } = context.addedPlugins[0]
+    expect(options.origins).toEqual([
+      'https://cms.example.com:8443',
+      'http://[::1]:3000',
+    ])
+    expect(options.drupal).toBe(null)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('alert(2)'))
+    warn.mockRestore()
   })
 
   test('an origin that is not an http(s) URL is reported, not dropped quietly', () => {
@@ -343,7 +369,7 @@ describe('DruxtNodePreview module', () => {
         'https://cms.example.com',
         'https://other.example.com',
       ])
-      expect(options.backends).toEqual(['https://other.example.com'])
+      expect(options.drupal).toBe('https://cms.example.com')
       warn.mockRestore()
     })
 
