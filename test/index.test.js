@@ -53,6 +53,7 @@ describe('DruxtNodePreview module', () => {
     expect(context.routes[0].name).toBe('druxt-node-preview')
     expect(context.addedPlugins[0].options.include).toEqual([])
     expect(context.addedPlugins[0].options.origins).toEqual([])
+    expect(context.addedPlugins[0].options.backends).toEqual([])
     expect(context.addedPlugins[0].options.layouts).toEqual([])
   })
 
@@ -319,6 +320,30 @@ describe('DruxtNodePreview module', () => {
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('Could not register the preview target')
       )
+      warn.mockRestore()
+    })
+
+    test('a backend is an allowed origin even when the build has no secret', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const context = buildContext({
+        baseUrl: 'https://cms.example.com',
+        nodePreview: {
+          register: {
+            url: 'https://www.example.com',
+            consumer: 'frontend',
+            backend: 'https://other.example.com/',
+          },
+        },
+      })
+      NuxtModule.call(context)
+      // Registration waits for the secret at start, but the page is built now.
+      expect(context.hooks.ready).toBeUndefined()
+      const { options } = context.addedPlugins[0]
+      expect(options.origins).toEqual([
+        'https://cms.example.com',
+        'https://other.example.com',
+      ])
+      expect(options.backends).toEqual(['https://other.example.com'])
       warn.mockRestore()
     })
 

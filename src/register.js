@@ -55,6 +55,26 @@ const toBaseUrl = (value) => {
 }
 
 /**
+ * Returns the backend that the register option names, or null.
+ *
+ * It needs no secret. The build makes the preview page, and the page must
+ * accept previews from the backend even when only `nuxt start` has the secret.
+ *
+ * @param {*} value - The `register` option.
+ * @param {object} env - The environment, such as process.env.
+ *
+ * @returns {string|null} The backend's base URL.
+ */
+export const resolveBackend = (value, env) => {
+  if (value !== true && (typeof value !== 'object' || !value)) return null
+  if (Array.isArray(value)) return null
+  const options = value === true ? {} : value
+  const raw =
+    fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_BACKEND') || options.backend
+  return raw ? toBaseUrl(raw) : null
+}
+
+/**
  * Returns the registration settings, or null when registration is off.
  *
  * The environment wins over the options, so one nuxt.config.js serves each

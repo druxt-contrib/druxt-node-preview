@@ -1,5 +1,10 @@
 import { resolve } from 'path'
-import { registerOnce, registerTarget, resolveRegister } from './register.js'
+import {
+  registerOnce,
+  registerTarget,
+  resolveBackend,
+  resolveRegister,
+} from './register.js'
 
 /**
  * Returns a URL's origin, or null when it is not an http(s) URL.
@@ -151,6 +156,7 @@ const NuxtModule = function (moduleOptions = {}) {
   })
 
   const register = resolveRegister(options.register, process.env)
+  const backend = resolveBackend(options.register, process.env)
 
   // An origin the site lists must be a full http(s) URL. Say so, rather than
   // leave the site to find out from a refused preview.
@@ -172,6 +178,9 @@ const NuxtModule = function (moduleOptions = {}) {
   const pluginOptions = {
     include: toInclude(options.include),
     origins: [],
+    // The page fetches from these without the Druxt client, whose options are
+    // for druxt.baseUrl.
+    backends: backend ? [toOrigin(backend)] : [],
     layouts: toLayouts(options.layouts),
   }
 
@@ -182,11 +191,7 @@ const NuxtModule = function (moduleOptions = {}) {
   const setOrigins = () => {
     const baseUrl = ((this.options || {}).druxt || {}).baseUrl
     pluginOptions.origins = [
-      ...new Set(
-        [baseUrl, register && register.backend, ...listed]
-          .map(toOrigin)
-          .filter(Boolean)
-      ),
+      ...new Set([baseUrl, backend, ...listed].map(toOrigin).filter(Boolean)),
     ]
   }
   setOrigins()

@@ -16,6 +16,8 @@ export default ({ app, store }, inject) => {
   const layouts = JSON.parse('<%= JSON.stringify(options.layouts) %>')
   // Origins the preview may come from, besides this site's own.
   const origins = JSON.parse('<%= JSON.stringify(options.origins) %>')
+  // Register backends, which the page fetches from without the Druxt client.
+  const backends = JSON.parse('<%= JSON.stringify(options.backends) %>')
 
   // Separates the endpoint from a token in the URL fragment.
   const TOKEN_MARK = ';token='
@@ -282,7 +284,8 @@ export default ({ app, store }, inject) => {
      * The request goes through the Druxt client, with credentials. The site's
      * request interceptors apply, and the editor's session cookie goes with
      * it. A path stays a path. The client resolves it against its own base
-     * URL, and interceptors that decide by path still see it.
+     * URL, and interceptors that decide by path still see it. A register
+     * backend is the exception: it gets a plain request without the client.
      *
      * @param {string} endpoint - The JSON:API Node Preview endpoint.
      *
@@ -296,7 +299,10 @@ export default ({ app, store }, inject) => {
         Accept: 'application/vnd.api+json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       }
-      const client = (app.$druxt || {}).axios
+      // The Druxt client's defaults, such as its auth, are for druxt.baseUrl.
+      // A backend gets a plain request instead.
+      const { origin } = new URL(url, window.location.origin)
+      const client = backends.includes(origin) ? null : (app.$druxt || {}).axios
       if (client) {
         let response
         try {

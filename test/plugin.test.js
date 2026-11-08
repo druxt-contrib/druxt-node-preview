@@ -13,7 +13,11 @@ const loadPlugin = (include = ['field_body']) => {
     )
     .replace(
       "'<%= JSON.stringify(options.origins) %>'",
-      '\'["https://example.com"]\''
+      '\'["https://example.com","https://backend.example.com"]\''
+    )
+    .replace(
+      "'<%= JSON.stringify(options.backends) %>'",
+      '\'["https://backend.example.com"]\''
     )
     .replace(
       "'<%= JSON.stringify(options.layouts) %>'",
@@ -266,6 +270,29 @@ describe('$druxtNodePreview plugin', () => {
         withCredentials: false,
       })
     )
+
+    window.location.hash = ''
+  })
+
+  test('a backend endpoint goes without the Druxt client or its defaults', async () => {
+    const doc = { data: { type: 'node--article', id: UUID } }
+    const backend = `https://backend.example.com/jsonapi/node/article/${UUID}/preview`
+    window.location.hash = `#${backend};token=cnpt.a.b`
+
+    // The site's client could carry auth for druxt.baseUrl.
+    const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
+    window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch(injected.value.endpoint())
+
+    expect(get).not.toHaveBeenCalled()
+    expect(window.fetch).toHaveBeenCalledWith(`${backend}?include=field_body`, {
+      credentials: 'omit',
+      headers: {
+        Accept: 'application/vnd.api+json',
+        Authorization: 'Bearer cnpt.a.b',
+      },
+    })
 
     window.location.hash = ''
   })
