@@ -293,9 +293,9 @@ The module never sends `DRUXT_NODE_PREVIEW_CLIENT_SECRET` to the `backend`
 site, so a frontend can't hand its own site's secret to another one by
 mistake. The target reads with a token, because a path would name the wrong
 site. The module also accepts previews from the `backend` origin, and fetches
-them without the Druxt client, whose options are for `druxt.baseUrl`. The page
-learns the backend when Nuxt builds, so set it for the build as well as for
-`nuxt start`. Only registration needs the secret.
+them without the Druxt client, whose options are for `druxt.baseUrl`. Nuxt writes
+the backend into the page when it builds, so set it for the build as well as
+for `nuxt start`. Only registration needs the secret.
 
 ### Targets in settings.php
 
