@@ -42,12 +42,15 @@ A `backend` target holds the full URL, `[jsonapi_node_preview]`, instead.
 The page splits the token off and sends it as a bearer token with no cookie.
 This works once Drupal has Simple OAuth installed. A path goes through the
 Druxt client, so on a site with `druxt.proxy.api` the request goes through
-the site's own proxy, and Drupal doesn't need CORS settings for
-it. Otherwise,
-Drupal's CORS settings must allow the `Authorization` header. [Consumer Node
-Preview's "Previewing on another
+the site's own proxy, and Drupal doesn't need CORS settings for it.
+
+Otherwise, Drupal's CORS settings must allow the `Authorization` header. The
+[Druxt module](https://www.drupal.org/project/druxt) already does this on a
+site that leaves CORS off: it turns CORS on for any origin and header, without
+credentials. Only a site with CORS settings of its own needs to change them, as
+[Consumer Node Preview's "Previewing on another
 site"](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#previewing-on-another-site)
-shows those CORS settings.
+shows.
 
 The token gets the scopes in the consumer's **Authorization Code settings**.
 Set them up on the target's consumer:
