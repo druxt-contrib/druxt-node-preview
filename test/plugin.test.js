@@ -411,6 +411,33 @@ describe('$druxtNodePreview plugin', () => {
     await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(/403.*denied/)
   })
 
+  test('a failed response that is an HTML page leaves the page out', async () => {
+    const { injected } = buildPlugin()
+    window.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () =>
+        '\n <!DOCTYPE html>\n<html lang="en"><body>Denied</body></html>',
+    })
+    const error = await injected.value.fetch(ENDPOINT).catch((e) => e)
+    expect(error.message).toBe(
+      `Preview request failed with HTTP 401 for ${ENDPOINT}?include=field_body`
+    )
+  })
+
+  test('the token leaves the address as soon as the plugin starts', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#https://evil.invalid/jsonapi/node/article/${UUID}/preview;token=cnpt.a.b`
+    )
+    const { injected } = buildPlugin()
+    // Before anything checks or fetches the endpoint.
+    expect(window.location.hash).not.toContain('token')
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    window.location.hash = ''
+  })
+
   test('seed stores the resource and every include', () => {
     const { injected, commits } = buildPlugin()
     const doc = {

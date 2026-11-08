@@ -228,14 +228,14 @@ export default ({ app, store }, inject) => {
    *
    * @returns {Error} The error.
    */
-  const failure = (url, status, body) =>
-    new Error(
-      'Preview request failed with HTTP ' +
-        status +
-        ' for ' +
-        url +
-        (body ? ': ' + String(body).slice(0, 300) : '')
+  const failure = (url, status, body) => {
+    // An HTML error page says nothing useful in a one-line message.
+    const text = String(body || '').trim()
+    const shown = text && !text.startsWith('<') ? ': ' + text.slice(0, 300) : ''
+    return new Error(
+      'Preview request failed with HTTP ' + status + ' for ' + url + shown
     )
+  }
 
   const plugin = {
     /**
@@ -393,6 +393,10 @@ export default ({ app, store }, inject) => {
       return { type: doc.data.type, id: doc.data.id }
     },
   }
+
+  // Take the token out of the address before anything on the page reads it,
+  // such as an analytics page view. The plugin keeps it for the preview.
+  if (typeof window !== 'undefined') plugin.token()
 
   inject('druxtNodePreview', plugin)
 }
