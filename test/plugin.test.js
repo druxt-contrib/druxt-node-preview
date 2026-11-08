@@ -336,6 +336,24 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = ''
   })
 
+  test('the address keeps its encoding when the token leaves it', () => {
+    const { injected } = buildPlugin()
+    const encoded = `${ENDPOINT}?include=a%2526b`
+    window.location.hash = `#${encoded};token=cnpt.a.b`
+    const before = injected.value.endpoint()
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(window.location.hash).toBe(`#${encoded}`)
+    expect(injected.value.endpoint()).toBe(before)
+
+    // An encoded token mark leaves an encoded address that reads the same.
+    window.location.hash = '#' + encodeURIComponent(`${encoded};token=cnpt.c.d`)
+    const encodedBefore = injected.value.endpoint()
+    expect(injected.value.token()).toBe('cnpt.c.d')
+    expect(window.location.hash).not.toContain('token')
+    expect(injected.value.endpoint()).toBe(encodedBefore)
+    window.location.hash = ''
+  })
+
   test('endpoint repairs a scheme the router collapsed', () => {
     const { injected } = buildPlugin()
     window.location.hash =

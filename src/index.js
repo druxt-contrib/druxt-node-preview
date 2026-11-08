@@ -11,7 +11,8 @@ import {
  *
  * The URL parser lets a host name hold characters such as quotes and
  * brackets. The origin goes into the page's script, so its host must be plain:
- * letters, digits, dots and hyphens, or an IPv6 address in brackets.
+ * letters, digits, dots, hyphens and underscores, or an IPv6 address in
+ * brackets. A local host such as a Docker service name can hold underscores.
  *
  * @param {*} url - The URL.
  *
@@ -20,7 +21,7 @@ import {
 const toOrigin = (url) => {
   try {
     const { origin, protocol, hostname } = new URL(url)
-    const plain = /^([a-z0-9-]+\.)*[a-z0-9-]+$|^\[[0-9a-f:.]+\]$/
+    const plain = /^([a-z0-9_-]+\.)*[a-z0-9_-]+$|^\[[0-9a-f:.]+\]$/
     return ['http:', 'https:'].includes(protocol) && plain.test(hostname)
       ? origin
       : null

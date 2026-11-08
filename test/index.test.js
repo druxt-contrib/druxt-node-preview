@@ -139,6 +139,7 @@ describe('DruxtNodePreview module', () => {
           "https://y'+alert(2)+'.example",
           'https://cms.example.com:8443',
           'http://[::1]:3000',
+          'http://drupal_web:8080',
         ],
       },
     })
@@ -147,6 +148,7 @@ describe('DruxtNodePreview module', () => {
     expect(options.origins).toEqual([
       'https://cms.example.com:8443',
       'http://[::1]:3000',
+      'http://drupal_web:8080',
     ])
     expect(options.drupal).toBe(null)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('alert(2)'))

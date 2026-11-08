@@ -282,10 +282,15 @@ export default ({ app, store }, inject) => {
         kept = { endpoint, token }
         // An error tracker or session recorder on the page can log the
         // address. So the token leaves it, and the page keeps it here.
+        // The address keeps the endpoint as it was encoded, so it reads the
+        // same when the page loads again.
+        const at = raw.indexOf(TOKEN_MARK)
+        const address =
+          at === -1 ? encodeURIComponent(endpoint) : raw.slice(0, at)
         window.history.replaceState(
           window.history.state,
           '',
-          window.location.pathname + window.location.search + '#' + endpoint
+          window.location.pathname + window.location.search + '#' + address
         )
         return token
       }
