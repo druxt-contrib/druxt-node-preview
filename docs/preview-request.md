@@ -105,3 +105,10 @@ editor's session.
 The page only works in the browser. A server render shows "Loading
 preview..." and the browser fills it in. A statically generated page has the
 default layout, so the page switches to the listed layout in the browser.
+
+Each preview is one editor's unsaved draft, so the server render sends
+`Cache-Control: no-store` and `X-Robots-Tag: noindex`. A page cache, CDN or
+proxy in front of Nuxt then doesn't store it, and search engines don't index
+it. A statically generated page has no headers, so it carries a
+`<meta name="robots" content="noindex">` tag instead. A host that caches
+static files needs its own rule for the preview path.

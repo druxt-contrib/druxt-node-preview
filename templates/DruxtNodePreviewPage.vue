@@ -37,6 +37,27 @@ export default {
   components: { DruxtNodePreview },
 
   /**
+   * Tells caches and search engines to keep nothing of this page.
+   *
+   * Each preview is one editor's unsaved draft, so a page cache, CDN or proxy
+   * must not store the server render. The headers go on the render's own
+   * response, where a page cache in front of Nuxt can see them.
+   *
+   * @param {object} context - The Nuxt context. It has `res` only on the server.
+   */
+  middleware({ res }) {
+    if (!res || res.headersSent) return
+    res.setHeader('Cache-Control', 'no-store')
+    res.setHeader('X-Robots-Tag', 'noindex')
+  },
+
+  // A generated site writes this page out as a file, with no headers. The
+  // tag asks search engines not to index it there too.
+  head: () => ({
+    meta: [{ hid: 'robots', name: 'robots', content: 'noindex' }],
+  }),
+
+  /**
    * The layout named by `?layout=`, when the `layouts` option lists it.
    *
    * @param {object} context - The Nuxt context.
