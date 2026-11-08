@@ -10,16 +10,17 @@ import { DruxtClient } from 'druxt'
  * sends the PATCH again on a timer, so a running frontend's target stays active.
  *
  * Every request goes through a DruxtClient, so the site's `druxt.axios` options
- * apply, but a backend gets only their timeout and proxy, and no credentials
- * from the global axios defaults. No request follows a redirect, so the secret
- * never goes to another host. A failure never stops Nuxt, and no message holds
- * the secret or the token.
+ * apply, but a backend gets only their timeout and proxy, and only the Accept
+ * and Content-Type headers from the global axios defaults. No request follows
+ * a redirect, so the secret never goes to another host. A failure never stops
+ * Nuxt, and no message holds the secret or the token.
  */
 
 const PREFIX = '[druxt-node-preview] '
 const TIMEOUT = 5000
-// The headers that carry a credential for druxt.baseUrl.
-const CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization']
+// The only global axios headers a register backend keeps. Each request sets
+// the rest of the headers it needs.
+const BACKEND_HEADERS = ['accept', 'content-type']
 
 /**
  * The time between registrations, in milliseconds. Consumer Node Preview marks
@@ -208,21 +209,24 @@ const reason = (data) => {
 }
 
 /**
- * Removes the credentials that axios copies from its global defaults.
+ * Removes what axios copies from its global defaults for druxt.baseUrl.
  *
- * A new axios instance starts with the global headers, auth and params. They
- * are for druxt.baseUrl, so a register backend must not get them.
+ * A new axios instance starts with the global headers, auth and params. Any of
+ * them can hold a credential for druxt.baseUrl, so a register backend keeps
+ * only the Accept and Content-Type headers.
  *
  * @param {object} defaults - The axios instance's defaults.
  */
-const withoutCredentials = (defaults) => {
+const forBackend = (defaults) => {
   delete defaults.auth
   delete defaults.params
   const headers = defaults.headers || {}
   for (const set of [headers, ...Object.values(headers)]) {
     if (!set || typeof set !== 'object') continue
-    for (const name of Object.keys(set)) {
-      if (CREDENTIAL_HEADERS.includes(name.toLowerCase())) delete set[name]
+    for (const [name, value] of Object.entries(set)) {
+      // An object is a set of headers for one method, such as get or patch.
+      if (value && typeof value === 'object') continue
+      if (!BACKEND_HEADERS.includes(name.toLowerCase())) delete set[name]
     }
   }
 }
@@ -303,7 +307,7 @@ export const registerTarget = async ({
       ...druxt,
       axios: { timeout: TIMEOUT, ...axios },
     })
-    if (backend) withoutCredentials(client.axios.defaults)
+    if (backend) forBackend(client.axios.defaults)
 
     const answer = await send(
       client,

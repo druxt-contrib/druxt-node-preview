@@ -276,10 +276,12 @@ describe('registerTarget', () => {
     expect(defaults.params).toBeUndefined()
   })
 
-  test('a backend gets no credentials from the global axios', async () => {
+  test('a backend gets no headers or credentials from the global axios', async () => {
     answer(tokenOk(), saved(), tokenOk(), saved())
     axios.defaults.headers.common.Authorization = 'Basic Z2xvYmFs'
     axios.defaults.headers.patch.Cookie = 'SESS=site'
+    axios.defaults.headers.common['X-Api-Key'] = 'site'
+    axios.defaults.headers['X-Site'] = 'yes'
     axios.defaults.params = { api_key: 'site' }
     try {
       await registerTarget(
@@ -289,12 +291,20 @@ describe('registerTarget', () => {
     } finally {
       delete axios.defaults.headers.common.Authorization
       delete axios.defaults.headers.patch.Cookie
+      delete axios.defaults.headers.common['X-Api-Key']
+      delete axios.defaults.headers['X-Site']
       delete axios.defaults.params
     }
     const [backend, site] = clients.map(({ axios }) => axios.defaults)
     expect(backend.headers.common.Authorization).toBeUndefined()
     expect(backend.headers.patch.Cookie).toBeUndefined()
+    expect(backend.headers.common['X-Api-Key']).toBeUndefined()
+    expect(backend.headers['X-Site']).toBeUndefined()
     expect(backend.params).toBeUndefined()
+    // Only what axios needs to send the request is left.
+    expect(backend.headers.common.Accept).toBe(
+      axios.defaults.headers.common.Accept
+    )
     // druxt.baseUrl keeps what axios gives it.
     expect(site.headers.common.Authorization).toBe('Basic Z2xvYmFs')
   })
