@@ -75,6 +75,9 @@ const buildPlugin = (app = {}, include = undefined) => {
 
 // cspell:ignore cnpt
 describe('$druxtNodePreview plugin', () => {
+  // A token kept for a reload must not reach the next test.
+  beforeEach(() => window.sessionStorage.clear())
+
   test('injects the plugin', () => {
     const { injected } = buildPlugin()
     expect(injected.name).toBe('druxtNodePreview')
@@ -454,6 +457,43 @@ describe('$druxtNodePreview plugin', () => {
     expect(window.location.hash).toBe(`#${ENDPOINT}`)
     expect(injected.value.token()).toBe('cnpt.a.b')
     window.location.hash = ''
+  })
+
+  test('a client error without a body adds nothing after the address', async () => {
+    const error = Object.assign(new Error('x'), { response: { status: 500 } })
+    const get = jest.fn().mockRejectedValue(error)
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    const failed = await injected.value.fetch(ENDPOINT).catch((e) => e)
+    expect(failed.message).toBe(
+      `Preview request failed with HTTP 500 for ${ENDPOINT}?include=field_body`
+    )
+  })
+
+  test('a malformed fragment does not stop the plugin starting', () => {
+    window.location.hash = '#section%'
+    const { injected } = buildPlugin()
+    expect(injected.name).toBe('druxtNodePreview')
+    expect(injected.value.token()).toBe(null)
+    window.location.hash = ''
+  })
+
+  test('the token survives a reload of the page, out of the address', () => {
+    window.sessionStorage.clear()
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
+    )
+    buildPlugin()
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    // A reload starts a new page, with the address the token left.
+    const { injected } = buildPlugin()
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    // Another preview address gets no token from it.
+    window.location.hash = `#/jsonapi/node/article/${UUID}/preview`
+    expect(injected.value.token()).toBe(null)
+    window.location.hash = ''
+    window.sessionStorage.clear()
   })
 
   test('seed stores the resource and every include', () => {

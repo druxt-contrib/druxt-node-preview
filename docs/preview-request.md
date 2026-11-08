@@ -38,9 +38,12 @@ store.
 
 ## Previews with a token
 
-As soon as the page starts, it takes the token out of its address and holds it
-in memory, so an error tracker, session recorder or analytics page view on the
-page doesn't log it.
+As soon as the page starts, it takes the token out of its address, so an error
+tracker, session recorder or analytics page view on the page doesn't log it.
+The tab's session storage keeps it, so a reload of the frame still previews.
+A script that runs before the page's plugins, such as one in the page head,
+can still read the token. Keep such scripts off the preview route, or stop
+them recording its address.
 
 A frontend on another domain, or on a tunnel, never gets the editor's session.
 It can read the preview with a token instead. Use Consumer Node Preview's

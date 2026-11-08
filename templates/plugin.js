@@ -25,6 +25,8 @@ export default ({ app, store }, inject) => {
   const TOKEN_MARK = ';token='
   // The token, once read and taken out of the address, and its endpoint.
   let kept = null
+  // Where the tab keeps the token for a reload.
+  const TOKEN_STORE = 'druxtNodePreview.token'
 
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
@@ -277,9 +279,23 @@ export default ({ app, store }, inject) => {
      */
     token: () => {
       const raw = (window.location.hash || '').slice(1)
-      const [endpoint, token] = decodeURIComponent(raw).split(TOKEN_MARK)
+      let endpoint
+      let token
+      try {
+        ;[endpoint, token] = decodeURIComponent(raw).split(TOKEN_MARK)
+      } catch {
+        // A fragment that is not a preview, such as "#section%", has no token.
+        return null
+      }
       if (token) {
         kept = { endpoint, token }
+        // A reload starts a new page from the address without the token. The
+        // tab's session storage keeps it for that, out of any logged address.
+        try {
+          window.sessionStorage.setItem(TOKEN_STORE, JSON.stringify(kept))
+        } catch {
+          // Storage can be off. The page then reads the token only once.
+        }
         // An error tracker or session recorder on the page can log the
         // address. So the token leaves it, and the page keeps it here.
         // The address keeps the endpoint as it was encoded, so it reads the
@@ -293,6 +309,13 @@ export default ({ app, store }, inject) => {
           window.location.pathname + window.location.search + '#' + address
         )
         return token
+      }
+      if (!kept) {
+        try {
+          kept = JSON.parse(window.sessionStorage.getItem(TOKEN_STORE))
+        } catch {
+          kept = null
+        }
       }
       return kept && kept.endpoint === endpoint ? kept.token : null
     },
@@ -336,9 +359,11 @@ export default ({ app, store }, inject) => {
           const failed = error.response || {}
           if (!failed.status) throw error
           const body =
-            typeof failed.data === 'string'
-              ? failed.data
-              : JSON.stringify(failed.data || '')
+            failed.data === undefined || failed.data === null
+              ? ''
+              : typeof failed.data === 'string'
+                ? failed.data
+                : JSON.stringify(failed.data)
           throw failure(url, failed.status, body)
         }
         checkType((response.headers || {})['content-type'])
@@ -397,7 +422,9 @@ export default ({ app, store }, inject) => {
   // Take the token out of the address before anything on the page reads it,
   // such as an analytics page view. The plugin keeps it for the preview. The
   // router's first navigation writes back the address it started with, so
-  // take it out again once the router is ready.
+  // take it out again once the router is ready. A script that runs before
+  // this plugin, such as one in the page head or an earlier plugin, can still
+  // read the token.
   if (typeof window !== 'undefined') {
     plugin.token()
     if (app.router && app.router.onReady) app.router.onReady(plugin.token)
