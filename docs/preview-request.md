@@ -2,7 +2,10 @@
 
 The page fetches through the Druxt client, `$druxt.axios`, with credentials.
 The site's request interceptors apply, such as one that adds a workspace
-header. Without the Druxt client, the page uses `window.fetch`.
+header. Without the Druxt client, the page uses `window.fetch`. That resolves
+a path against the frontend's own origin, not `druxt.baseUrl`, so a site
+without the Druxt client or a proxy needs the full URL,
+`[jsonapi_node_preview]`, with Drupal's origin in the `origins` option.
 
 `[jsonapi_node_preview_path]` gives the preview's address as a path, and a path
 stays a path. The Druxt client resolves it against its own base URL, and
@@ -14,16 +17,21 @@ Drupal's sign-in pages, so it is not enough on its own.
 
 Without a proxy, the request goes to Drupal's origin, so Drupal needs CORS that
 allows the frontend's origin with credentials. The session cookie is
-`SameSite=Lax`, so the frontend and Drupal need one parent domain.
+`SameSite=Lax`, so the frontend and Drupal need one parent domain and the same
+scheme, `https` for both.
 
-`[jsonapi_node_preview]`, the full URL, names the host the editor is on. On a
-site that proxies JSON:API and has no CORS settings, that request is
-cross-origin, and the browser blocks it.
+`[jsonapi_node_preview]`, the full URL, names the Drupal host the editor is
+on. Unless that host has the frontend's own scheme, host and port, the request
+is cross-origin, and Drupal needs CORS settings for it, even on a site that
+proxies JSON:API.
 
-The page only fetches a node preview, from an address that ends in
-`/{uuid}/preview`. The response must be `application/vnd.api+json`, and each
-resource in it must have a JSON:API type and a UUID. If a check fails, the
-page shows an error and puts nothing in the store.
+Before it sends a request, the page checks the preview's address. It must be
+on the frontend's own origin, `druxt.baseUrl`, a register `backend`, or an
+origin in the `origins` option, and it must end in `/{uuid}/preview`. The
+response must be `application/vnd.api+json`. Each resource in it must have a
+JSON:API type and a UUID, and the main resource's UUID must be the one in the
+address. If a check fails, the page shows an error and puts nothing in the
+store.
 
 ## Previews with a token
 
@@ -39,8 +47,11 @@ With automatic registration, set `token: true`, or
 `DRUXT_NODE_PREVIEW_REGISTER_TOKEN=true`, and the module registers that URL.
 A `backend` target holds the full URL, `[jsonapi_node_preview]`, instead.
 
-The page splits the token off and sends it as a bearer token with no cookie.
-This works once Drupal has Simple OAuth installed. A path goes through the
+The page splits the token off and sends it as a bearer token, without
+credentials, so a request to another origin doesn't send a cookie. A path through
+the site's own proxy is a same-origin request, so the browser still sends the
+frontend's own cookies with it. This works once Drupal has Simple OAuth
+installed. A path goes through the
 Druxt client, so on a site with `druxt.proxy.api` the request goes through
 the site's own proxy, and Drupal doesn't need CORS settings for it.
 

@@ -16,6 +16,10 @@ Then, on the consumer in Drupal, add one layout name in each **Preview
 layouts** box. Put `default` first, because the preview opens in the first one.
 Add `&layout=[layout]` to the target URL, before the `#`.
 
+This needs Nuxt's default history router. With `router: { mode: 'hash' }`,
+the route itself goes after the `#`, so the page can read neither the layout
+nor the preview address.
+
 The page uses the layout that `?layout=` names, but only if `layouts` lists
 it. If not, the page uses the default layout. A preview URL cannot pick any
 other layout.
@@ -76,11 +80,20 @@ as above, or check the `mode` prop.
 
 A component that reads the Druxt store shows the unsaved data. A component
 that fetches its data again, such as paragraphs at a revision, shows the saved
-content instead. Skip that fetch while a preview is active:
+content instead. Have it read the resource from the Druxt store during a
+preview:
 
 ```js
-if ((this.$store.state.druxtNodePreview || {}).active) return
+if ((this.$store.state.druxtNodePreview || {}).active) {
+  // Read the resource from the Druxt store here.
+  return
+}
 ```
+
+Skipping the fetch is not enough on its own. A component that shows only what
+it fetched would then show nothing. A fetch that started before the preview
+data arrived can also finish after it. Its result must then be dropped, so
+check `active` again when it returns.
 
 When the editor leaves the preview, the module removes the preview data from
 the store. The next page loads the saved content.

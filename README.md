@@ -47,7 +47,8 @@ show it, paragraphs included.
    after the `#`. Browsers do not send that part to the frontend's server.
 3. The page fetches the preview, from
    [JSON:API Node Preview](https://www.drupal.org/project/jsonapi_node_preview),
-   with the editor's Drupal session. It puts the document in the Druxt store.
+   with the editor's Drupal session, or with a token from the URL for a
+   frontend on another domain. It puts the document in the Druxt store.
 4. `DruxtEntity` renders the node from the store. The unsaved content goes
    through the same components as the live site.
 
@@ -108,9 +109,9 @@ On Drupal:
    `services.yml`. [Consumer Node Preview's
    configuration](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#configuration)
    has the YAML.
-4. Let Drupal show the frontend in a frame. Remove any `X-Frame-Options` header
-   from the frontend's responses, and add Drupal's origin to any
-   `frame-ancestors` rule.
+4. Let Drupal show the preview page in a frame. On the preview page's route
+   only, remove any `X-Frame-Options` header, and add Drupal's origin to its
+   `frame-ancestors` rule. Keep the frontend's other pages as they are.
 
 To check it, edit a node, change something and press Preview. The Frontend
 tab shows the change.

@@ -39,7 +39,10 @@ DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' npm run start
 
 An environment variable wins over the option in `nuxt.config.js`. So one
 config serves local, staging and production, and each host sets its own
-values. `register: true` takes all of them from the environment. The module
+values. An empty variable counts as unset, so it can't clear an option. To
+register on `druxt.baseUrl` by default, leave `backend` out of
+`nuxt.config.js`, and set `DRUXT_NODE_PREVIEW_REGISTER_BACKEND` only where the
+frontend registers on another site. `register: true` takes all of them from the environment. The module
 reads secrets only from the environment, so keep them out of `nuxt.config.js`
 and the repository.
 
@@ -48,8 +51,8 @@ and the repository.
 When Nuxt is ready, in `nuxt dev`, `nuxt build`, `nuxt generate` and
 `nuxt start`, the module:
 
-1. Gets a token from `/oauth/token` on `druxt.baseUrl`, with Simple OAuth's
-   client credentials grant.
+1. Gets a token from `/oauth/token` on the `backend` if there is one, or on
+   `druxt.baseUrl`, with Simple OAuth's client credentials grant.
 2. Sends its target in a PATCH to Consumer Node Preview's
    `/api/consumer-node-preview/targets`. Drupal replaces the target that has
    the same label, or adds a new one, and records the time. The other targets
@@ -61,7 +64,9 @@ The target URL is `url`, then the `path` option, then
 consumer's layouts. With the `token` option, the URL ends in
 `#[jsonapi_node_preview_path];token=[preview_token]` instead. With a `backend`,
 it holds the full endpoint, `#[jsonapi_node_preview];token=[preview_token]`,
-because a path would name `druxt.baseUrl`.
+because a path would name `druxt.baseUrl`. A `backend` turns the token on
+unless `token` is `false`. Then the target holds the full endpoint without a
+token, and reads with the editor's session.
 
 The module registers when each Nuxt process starts, then every 6 hours while
 it runs. Consumer Node Preview moves a target that stops registering to its
@@ -70,7 +75,9 @@ static site only registers when it builds, so its target goes inactive unless
 it builds again in time. An inactive target can still be picked.
 
 A failure never stops the build or the server. The module shows a warning and
-Nuxt carries on, and the consumer keeps the targets it had. `nuxt build` and
+Nuxt carries on. A failure before the PATCH leaves the consumer's targets as
+they were. A PATCH that times out may still have saved the new target, so
+check the targets as below after a failure. `nuxt build` and
 `nuxt start` both register, so a build without the secret only shows a
 warning.
 
@@ -109,8 +116,8 @@ DRUXT_NODE_PREVIEW_REGISTER_SECRET='<the consumer secret>' npm run start
 
 The module never sends `DRUXT_NODE_PREVIEW_CLIENT_SECRET` to the `backend`
 site, so a frontend can't hand its own site's secret to another one by
-mistake. The target reads with a token, because a path would name the wrong
-site. The module also accepts previews from the `backend` origin, so editors
+mistake. By default the target reads with a token, because a path would name
+the wrong site. The module also accepts previews from the `backend` origin, so editors
 must open that Drupal site at exactly that origin: the same scheme, host and
 port. A preview from any other origin is refused. The page fetches from the
 `backend` without the Druxt client, whose options are for `druxt.baseUrl`.

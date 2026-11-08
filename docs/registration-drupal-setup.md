@@ -33,15 +33,16 @@ token](preview-request.md#previews-with-a-token).
    **Access token expiration time**, or it shows "This value should not be
    null". A recipe that imports a consumer needs these fields too.
 
-2. Make Simple OAuth's keys in a folder outside the web root, and set their
-   paths. The paths are also at **Administration > Configuration > People >
-   Simple OAuth**.
+2. Make Simple OAuth's keys in a folder of the site's own, outside the web
+   root, and set their paths. The paths are also at **Administration >
+   Configuration > People > Simple OAuth**. For a site whose web root is
+   `/srv/example.com/web`:
 
    ```sh
-   mkdir -p /var/www/keys
-   drush simple-oauth:generate-keys /var/www/keys
-   drush config:set simple_oauth.settings public_key /var/www/keys/public.key -y
-   drush config:set simple_oauth.settings private_key /var/www/keys/private.key -y
+   mkdir -p /srv/example.com/oauth-keys
+   drush simple-oauth:generate-keys /srv/example.com/oauth-keys
+   drush config:set simple_oauth.settings public_key /srv/example.com/oauth-keys/public.key -y
+   drush config:set simple_oauth.settings private_key /srv/example.com/oauth-keys/private.key -y
    ```
 
 3. Add a role, such as Preview target registrar. Give it the permission
@@ -64,8 +65,11 @@ token](preview-request.md#previews-with-a-token).
    - In the **Scopes** under **Client Credentials settings**, pick the scope
      from step 5.
 7. Make the user from step 4 the consumer's owner. Consumer Node Preview
-   lets a user change only the targets of a consumer it owns. The consumer
-   form has no owner field, so use Drush:
+   lets a user change only the targets of a consumer it owns. If the current
+   owner changes the targets through that permission, it can't once the owner
+   changes, so check first how that user will manage them. The consumer form
+   has no owner field, so use Drush. Replace `frontend` with the consumer's
+   client ID, and `frontend_registrar` with the user name from step 4:
 
    ```sh
    drush php:eval '$c = \Drupal::entityTypeManager()->getStorage("consumer")->loadByProperties(["client_id" => "frontend"]); $u = user_load_by_name("frontend_registrar"); reset($c)->setOwnerId($u->id())->save();'
