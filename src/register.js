@@ -10,17 +10,14 @@ import { DruxtClient } from 'druxt'
  * sends the PATCH again on a timer, so a running frontend's target stays active.
  *
  * Every request goes through a DruxtClient, so the site's `druxt.axios` options
- * apply, but a backend gets only their timeout and proxy, and only the Accept
- * and Content-Type headers from the global axios defaults. No request follows
- * a redirect, so the secret never goes to another host. A failure never stops
- * Nuxt, and no message holds the secret or the token.
+ * apply, but a backend gets only their timeout and proxy, and nothing from the
+ * global axios defaults. No request follows a redirect, so the secret never
+ * goes to another host. A failure never stops Nuxt, and no message holds the
+ * secret or the token.
  */
 
 const PREFIX = '[druxt-node-preview] '
 const TIMEOUT = 5000
-// The only global axios headers a register backend keeps. Each request sets
-// the rest of the headers it needs.
-const BACKEND_HEADERS = ['accept', 'content-type']
 
 /**
  * The time between registrations, in milliseconds. Consumer Node Preview marks
@@ -209,26 +206,39 @@ const reason = (data) => {
 }
 
 /**
- * Removes what axios copies from its global defaults for druxt.baseUrl.
+ * Replaces an axios instance's defaults with ones made here.
  *
- * A new axios instance starts with the global headers, auth and params. Any of
- * them can hold a credential for druxt.baseUrl, so a register backend keeps
- * only the Accept and Content-Type headers.
+ * A new axios instance starts with a copy of the global axios defaults, and
+ * axios falls back to the global adapter. Their headers, auth, params and
+ * transforms can all add a credential for druxt.baseUrl. So a register backend
+ * gets none of them: only the http adapter, JSON in and out, and the timeout
+ * and proxy. Each request sets the headers it needs.
  *
  * @param {object} defaults - The axios instance's defaults.
+ * @param {object} options - The timeout, and the proxy if there is one.
  */
-const forBackend = (defaults) => {
-  delete defaults.auth
-  delete defaults.params
-  const headers = defaults.headers || {}
-  for (const set of [headers, ...Object.values(headers)]) {
-    if (!set || typeof set !== 'object') continue
-    for (const [name, value] of Object.entries(set)) {
-      // An object is a set of headers for one method, such as get or patch.
-      if (value && typeof value === 'object') continue
-      if (!BACKEND_HEADERS.includes(name.toLowerCase())) delete set[name]
-    }
-  }
+const forBackend = (defaults, options) => {
+  for (const name of Object.keys(defaults)) delete defaults[name]
+  Object.assign(defaults, {
+    ...options,
+    adapter: 'http',
+    headers: {},
+    transformRequest: [
+      (data) =>
+        data === undefined || typeof data === 'string'
+          ? data
+          : JSON.stringify(data),
+    ],
+    transformResponse: [
+      (data) => {
+        try {
+          return JSON.parse(data)
+        } catch {
+          return data
+        }
+      },
+    ],
+  })
 }
 
 /**
@@ -294,20 +304,19 @@ export const registerTarget = async ({
         `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
       )
     }
-    // The site's axios options are for druxt.baseUrl, so a backend gets only
-    // the timeout and proxy.
-    const axios = backend
-      ? Object.fromEntries(
-          Object.entries(druxt.axios || {}).filter(([name]) =>
-            ['timeout', 'proxy'].includes(name)
-          )
-        )
-      : druxt.axios
     const client = new DruxtClient(base, {
       ...druxt,
-      axios: { timeout: TIMEOUT, ...axios },
+      axios: { timeout: TIMEOUT, ...druxt.axios },
     })
-    if (backend) forBackend(client.axios.defaults)
+    // The site's axios options are for druxt.baseUrl, so a backend gets only
+    // the timeout and proxy.
+    if (backend) {
+      const { proxy } = druxt.axios || {}
+      forBackend(client.axios.defaults, {
+        timeout: client.axios.defaults.timeout,
+        ...(proxy === undefined ? {} : { proxy }),
+      })
+    }
 
     const answer = await send(
       client,

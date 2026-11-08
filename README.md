@@ -256,10 +256,9 @@ replace each other's target.
 
 The module sends each request with a `DruxtClient` from Druxt, so the site's
 `druxt.axios` options, such as its headers, apply. A `backend` gets only the
-`timeout` and `proxy` from `druxt.axios`, and only the `Accept` and
-`Content-Type` headers from the global axios defaults, because the rest are for
-`druxt.baseUrl`. It never follows a
-redirect, so the secret goes only to the site it names.
+`timeout` and `proxy` from `druxt.axios`, and nothing from the global axios
+defaults, because they are for `druxt.baseUrl`. It never follows a redirect,
+so the secret goes only to the site it names.
 
 To read the targets back, send the consumer's client ID in the
 `X-Consumer-ID` header, or put `?consumerId=<client id>` or
