@@ -309,16 +309,17 @@ export const registerTarget = async ({
         `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
       )
     }
+    // The site's axios options are for druxt.baseUrl, so a backend gets only
+    // the timeout and proxy. Its client starts from axios's own defaults, so
+    // its adapter is the one axios chose.
+    const { timeout = TIMEOUT, proxy } = druxt.axios || {}
     const client = new DruxtClient(base, {
       ...druxt,
-      axios: { timeout: TIMEOUT, ...druxt.axios },
+      axios: backend ? { timeout } : { timeout: TIMEOUT, ...druxt.axios },
     })
-    // The site's axios options are for druxt.baseUrl, so a backend gets only
-    // the timeout and proxy.
     if (backend) {
-      const { proxy } = druxt.axios || {}
       forBackend(client.axios.defaults, {
-        timeout: client.axios.defaults.timeout,
+        timeout,
         ...(proxy === undefined ? {} : { proxy }),
       })
     }

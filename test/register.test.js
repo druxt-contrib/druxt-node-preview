@@ -321,6 +321,25 @@ describe('registerTarget', () => {
     expect(clients[0].axios.defaults.adapter).toBe(adapter)
   })
 
+  test("a backend ignores the site's adapter", async () => {
+    answer(tokenOk(), saved())
+    const before = axios.defaults.adapter
+    const adapter = jest.fn()
+    axios.defaults.adapter = adapter
+    try {
+      await registerTarget(
+        settings({
+          backend: 'https://other.example.com',
+          token: true,
+          druxt: { axios: { adapter: '' } },
+        })
+      )
+    } finally {
+      axios.defaults.adapter = before
+    }
+    expect(clients[0].axios.defaults.adapter).toBe(adapter)
+  })
+
   test('no request follows a redirect, and every status comes back', async () => {
     answer(tokenOk(), saved())
     await registerTarget(settings())
