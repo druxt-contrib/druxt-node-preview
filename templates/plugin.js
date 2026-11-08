@@ -395,8 +395,13 @@ export default ({ app, store }, inject) => {
   }
 
   // Take the token out of the address before anything on the page reads it,
-  // such as an analytics page view. The plugin keeps it for the preview.
-  if (typeof window !== 'undefined') plugin.token()
+  // such as an analytics page view. The plugin keeps it for the preview. The
+  // router's first navigation writes back the address it started with, so
+  // take it out again once the router is ready.
+  if (typeof window !== 'undefined') {
+    plugin.token()
+    if (app.router && app.router.onReady) app.router.onReady(plugin.token)
+  }
 
   inject('druxtNodePreview', plugin)
 }

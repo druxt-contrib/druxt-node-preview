@@ -438,6 +438,24 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = ''
   })
 
+  test('the token leaves the address again once the router is ready', () => {
+    const address = `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
+    window.history.replaceState(null, '', address)
+    let ready
+    const { injected } = buildPlugin({
+      router: {
+        beforeEach: () => {},
+        onReady: (callback) => (ready = callback),
+      },
+    })
+    // Its first navigation writes the address it started with back.
+    window.history.replaceState(null, '', address)
+    ready()
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    window.location.hash = ''
+  })
+
   test('seed stores the resource and every include', () => {
     const { injected, commits } = buildPlugin()
     const doc = {
