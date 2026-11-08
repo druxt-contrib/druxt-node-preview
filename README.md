@@ -141,7 +141,7 @@ include: { 'node--page': ['field_content.field_media'] }
 fetches from this site, from `druxt.baseUrl`, and from `origins`. A request to
 an origin in `origins` goes without the Druxt client, whose headers and auth
 are for `druxt.baseUrl`. An origin whose host has characters other than
-letters, digits, dots, hyphens and underscores is ignored.
+letters, digits, dots, hyphens and `_` is ignored.
 
 A value the module cannot use shows a warning in the build output, and the
 module ignores it.
