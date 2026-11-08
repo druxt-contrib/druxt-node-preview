@@ -211,17 +211,22 @@ const reason = (data) => {
  * A new axios instance starts with a copy of the global axios defaults, and
  * axios falls back to the global adapter. Their headers, auth, params and
  * transforms can all add a credential for druxt.baseUrl. So a register backend
- * gets none of them: only the http adapter, JSON in and out, and the timeout
+ * gets none of them: only an http adapter, JSON in and out, and the timeout
  * and proxy. Each request sets the headers it needs.
  *
  * @param {object} defaults - The axios instance's defaults.
  * @param {object} options - The timeout, and the proxy if there is one.
  */
 const forBackend = (defaults, options) => {
+  // axios 0.x gives each instance its http adapter as a function, and has no
+  // adapter names. axios 1.x gives a list of names, so the backend asks for
+  // its http adapter by name.
+  const adapter =
+    typeof defaults.adapter === 'function' ? defaults.adapter : 'http'
   for (const name of Object.keys(defaults)) delete defaults[name]
   Object.assign(defaults, {
     ...options,
-    adapter: 'http',
+    adapter,
     headers: {},
     transformRequest: [
       (data) =>
