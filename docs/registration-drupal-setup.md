@@ -12,8 +12,9 @@ Do not use the public consumer that people sign in with, such as the one for
 druxt-auth's password or authorization code flow. The client credentials grant
 does not work with a public consumer.
 
-A target that reads with a token also needs the **Authorization Code** grant on
-the same consumer. See [Previews with a
+A target that reads with a token also needs the **Authorization Code** grant,
+and a scope of its own, on the same consumer. Steps 1 to 8 set up only the
+registration. Then follow [Previews with a
 token](preview-request.md#previews-with-a-token).
 
 ## Steps
@@ -56,9 +57,12 @@ token](preview-request.md#previews-with-a-token).
    <!-- vale ai-tells.OverusedVocabulary = YES -->
 6. Edit the frontend's consumer:
    - Set a **Secret**, and keep **Is Confidential?** on.
-   - Under **Grant types**, turn on **Client Credentials**.
-   - Set **User** to the user from step 4. The token acts as this user.
-   - Under **Scopes**, pick the scope from step 5.
+   - Under **Grant types**, turn on **Client Credentials**. For a target that
+     reads with a token, keep **Authorization Code** on as well.
+   - Under **Client Credentials settings**, set **User** to the user from
+     step 4. The token acts as this user.
+   - In the **Scopes** under **Client Credentials settings**, pick the scope
+     from step 5.
 7. Make the user from step 4 the consumer's owner. Consumer Node Preview
    lets a user change only the targets of a consumer it owns. The consumer
    form has no owner field, so use Drush:

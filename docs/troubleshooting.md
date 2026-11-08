@@ -20,7 +20,8 @@ register the preview target", then says what went wrong:
 - **"/oauth/token answered HTTP 404".** Simple OAuth is not installed.
 - **"/oauth/token answered HTTP 400" or "HTTP 401".** The secret is wrong, or
   the consumer is not confidential, does not allow the Client Credentials
-  grant, or has no User.
+  grant, or has no User. An `Authorization` header in `druxt.axios` also goes
+  with the token request, and can cause this.
 - **"You need to set the OAuth2 private key".** Simple OAuth has no keys. See
   step 2 of the [Drupal setup](registration-drupal-setup.md#steps).
 - **"/api/consumer-node-preview/targets answered HTTP 404".** Consumer Node

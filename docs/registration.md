@@ -59,7 +59,9 @@ The target URL is `url`, then the `path` option, then
 `?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]`. Without the
 `layouts` option, the URL has no `&layout=[layout]`, and Drupal keeps the
 consumer's layouts. With the `token` option, the URL ends in
-`#[jsonapi_node_preview];token=[preview_token]` instead.
+`#[jsonapi_node_preview_path];token=[preview_token]` instead. With a `backend`,
+it holds the full endpoint, `#[jsonapi_node_preview];token=[preview_token]`,
+because a path would name `druxt.baseUrl`.
 
 The module registers when each Nuxt process starts, then every 6 hours while
 it runs. Consumer Node Preview moves a target that stops registering to its
@@ -78,7 +80,10 @@ replace each other's target.
 
 The requests go from Nuxt's server, so they don't need CORS settings. They use
 the `timeout` in `druxt.axios`, or 5 seconds without one, and the site's other
-`druxt.axios` options. A `backend` gets only the `timeout` and `proxy` from
+`druxt.axios` options. So an `Authorization` header in `druxt.axios`, such as
+Basic auth in front of a staging Drupal, goes with the token request too, and
+Drupal can refuse it with HTTP 401, "Client authentication failed". A `backend`
+gets only the `timeout` and `proxy` from
 `druxt.axios`, and nothing from the global axios defaults, because they are for
 `druxt.baseUrl`. The requests never follow a redirect, so the secret goes only
 to the site they name. Use `https` there, because the token request sends the
@@ -105,7 +110,14 @@ DRUXT_NODE_PREVIEW_REGISTER_SECRET='<the consumer secret>' npm run start
 The module never sends `DRUXT_NODE_PREVIEW_CLIENT_SECRET` to the `backend`
 site, so a frontend can't hand its own site's secret to another one by
 mistake. The target reads with a token, because a path would name the wrong
-site. The module also accepts previews from the `backend` origin.
+site. The module also accepts previews from the `backend` origin, so editors
+must open that Drupal site at exactly that origin: the same scheme, host and
+port. A preview from any other origin is refused.
+
+The `backend` requests use none of the `druxt.axios` agents, so a client
+certificate for `druxt.baseUrl` stays there. If the `backend` site uses a
+private certificate authority, give Node its certificate with the
+`NODE_EXTRA_CA_CERTS` environment variable.
 
 ## Targets in settings.php
 

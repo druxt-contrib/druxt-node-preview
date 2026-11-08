@@ -32,18 +32,44 @@ It can read the preview with a token instead. Use Consumer Node Preview's
 `[preview_token]` token in the target URL:
 
 ```text
-https://preview.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview];token=[preview_token]
+https://preview.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path];token=[preview_token]
 ```
 
 With automatic registration, set `token: true`, or
 `DRUXT_NODE_PREVIEW_REGISTER_TOKEN=true`, and the module registers that URL.
+A `backend` target holds the full URL, `[jsonapi_node_preview]`, instead.
 
-The page splits the token off and sends it as a bearer token, with no cookie.
-Drupal needs Simple OAuth, the Authorization Code grant on the target's
-consumer, and CORS that allows the `Authorization` header.
-[Consumer Node Preview's "Previewing on another
+The page splits the token off and sends it as a bearer token with no cookie.
+This works once Drupal has Simple OAuth installed. A path goes through the
+Druxt client, so on a site with `druxt.proxy.api` the request goes through
+the site's own proxy, and Drupal doesn't need CORS settings for
+it. Otherwise,
+Drupal's CORS settings must allow the `Authorization` header. [Consumer Node
+Preview's "Previewing on another
 site"](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#previewing-on-another-site)
-covers the scopes and the CORS settings.
+shows those CORS settings.
+
+The token gets the scopes in the consumer's **Authorization Code settings**.
+Set them up on the target's consumer:
+
+1. Add a scope at
+   **Administration > Configuration > People > Simple OAuth > Scopes**. Turn
+   on its **Authorization Code** grant type.
+   <!-- vale ai-tells.OverusedVocabulary = NO -->
+   <!-- Granularity is the name of the field in Simple OAuth's scope form. -->
+   Under **Granularity**, pick **Role**, and then the role your editors have.
+   <!-- vale ai-tells.OverusedVocabulary = YES -->
+2. Edit the consumer. Under **Grant types**, turn on **Authorization Code**,
+   and set a **Redirect URI**, such as the frontend's URL. The form needs one,
+   but a preview never uses it.
+3. Under **Authorization Code settings**, pick the scope from step 1 in
+   **Scopes**.
+
+The **Scopes** under **Client Credentials settings** do not reach the token.
+A token without an Authorization Code scope has no scopes, and the preview
+fails with HTTP 403, "The 'access content' permission is required". A script
+that sets the consumer's grant types must keep **Authorization Code**, or the
+token is empty.
 
 Without Simple OAuth, the token is empty, and the page reads with the
 editor's session.
