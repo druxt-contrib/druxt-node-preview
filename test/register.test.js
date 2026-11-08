@@ -212,11 +212,15 @@ describe('registerTarget', () => {
     expect(request.mock.calls[1][1]).toBe(
       'https://cms.test/api/consumer-node-preview/targets'
     )
-    for (const call of [1, 3]) {
-      expect(JSON.parse(request.mock.calls[call][2].body).target.url).toBe(
-        'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview];token=[preview_token]'
-      )
-    }
+    const sent = (call) => JSON.parse(request.mock.calls[call][2].body)
+    // A path would name druxt.baseUrl, not the backend.
+    expect(sent(1).target.url).toBe(
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview];token=[preview_token]'
+    )
+    // On druxt.baseUrl, the path goes through the site's API proxy, if any.
+    expect(sent(3).target.url).toBe(
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path];token=[preview_token]'
+    )
   })
 
   test('sends the layouts once each, when the site lists them', async () => {
@@ -519,9 +523,15 @@ describe('registering on another Drupal site', () => {
     expect(settings.backend).toBe('https://other.example.com')
   })
 
-  test('the target holds the full endpoint and a token', () => {
-    expect(targetUrl('https://b.example.com', '/p', ['a'], true)).toBe(
+  test('a backend target holds the full endpoint and a token', () => {
+    expect(targetUrl('https://b.example.com', '/p', ['a'], true, true)).toBe(
       'https://b.example.com/p?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview];token=[preview_token]'
+    )
+  })
+
+  test('a token target on druxt.baseUrl holds the path and a token', () => {
+    expect(targetUrl('https://b.example.com', '/p', ['a'], true)).toBe(
+      'https://b.example.com/p?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path];token=[preview_token]'
     )
     expect(targetUrl('https://b.example.com', '/p', [])).toBe(
       'https://b.example.com/p?vm=[view_mode]#[jsonapi_node_preview_path]'

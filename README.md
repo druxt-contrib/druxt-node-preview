@@ -228,7 +228,9 @@ the `path` option, then
 `layouts` option, the URL has no `&layout=[layout]`. The path token works
 because the target is on the Drupal site at `druxt.baseUrl`, the site the
 Druxt client fetches from. With the `token` option, the URL ends in
-`#[jsonapi_node_preview];token=[preview_token]` instead.
+`#[jsonapi_node_preview_path];token=[preview_token]` instead. With a `backend`,
+the URL holds the full endpoint, `#[jsonapi_node_preview];token=[preview_token]`,
+because a path would name `druxt.baseUrl`.
 
 If the `layouts` option is set, the PATCH also sets the consumer's Preview
 layouts. If not, Drupal keeps the consumer's layouts.
@@ -485,11 +487,13 @@ with a token instead. Use Consumer Node Preview's `[preview_token]` token in
 the target URL:
 
 ```text
-https://preview.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview];token=[preview_token]
+https://preview.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path];token=[preview_token]
 ```
 
 With automatic registration, set `token: true`, or
 `DRUXT_NODE_PREVIEW_REGISTER_TOKEN=true`, and the module registers that URL.
+The path goes through the Druxt client, so on a site with `druxt.proxy.api`
+the preview request goes through the site's own proxy.
 
 The page splits the token off the fragment and sends it as a bearer token,
 with no cookie. Drupal then needs:
@@ -498,8 +502,9 @@ with no cookie. Drupal then needs:
 - The Authorization Code grant on the target's consumer, with a scope that
   gives the editor's role access to the preview. The token has the scopes
   the editor would get by signing in to that consumer.
-- CORS that allows the frontend's origin and the `Authorization` header. The
-  request has no credentials, so CORS can allow any origin.
+- CORS that allows the frontend's origin and the `Authorization` header,
+  unless the request goes through `druxt.proxy.api`. The request has no
+  credentials, so CORS can allow any origin.
 
 Without Simple OAuth, the token is empty, and the page reads with the
 editor's session.

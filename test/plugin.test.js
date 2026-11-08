@@ -250,6 +250,26 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = ''
   })
 
+  test('a path with a token goes through the client as a path', async () => {
+    const doc = { data: { type: 'node--article', id: UUID } }
+    const path = `/jsonapi/node/article/${UUID}/preview`
+    window.location.hash = `#${path};token=cnpt.a.b`
+
+    const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    expect(injected.value.endpoint()).toBe(path)
+    await injected.value.fetch(injected.value.endpoint())
+    expect(get).toHaveBeenCalledWith(
+      `${path}?include=field_body`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer cnpt.a.b' }),
+        withCredentials: false,
+      })
+    )
+
+    window.location.hash = ''
+  })
+
   test('endpoint repairs a scheme the router collapsed', () => {
     const { injected } = buildPlugin()
     window.location.hash =

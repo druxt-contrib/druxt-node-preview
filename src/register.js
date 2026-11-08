@@ -160,19 +160,20 @@ export const resolveRegister = (value, env) => {
  * @param {string[]} layouts - The layouts option.
  * @param {boolean} [token] - Whether the preview reads with a token, for an
  *   editor whose session doesn't reach this frontend. The fragment then holds
- *   the endpoint's full URL and the token. A path would name the wrong site
- *   when the target is on a Drupal site other than druxt.baseUrl.
+ *   the token after the endpoint.
+ * @param {boolean} [backend] - Whether the target is on a Drupal site other
+ *   than druxt.baseUrl. A path would name the wrong site, so the fragment
+ *   holds the endpoint's full URL instead.
  *
  * @returns {string} The URL template.
  */
-export const targetUrl = (url, path, layouts, token = false) =>
+export const targetUrl = (url, path, layouts, token = false, backend = false) =>
   url +
   path +
   '?vm=[view_mode]' +
   (layouts.length ? '&layout=[layout]' : '') +
-  (token
-    ? '#[jsonapi_node_preview];token=[preview_token]'
-    : '#[jsonapi_node_preview_path]')
+  (backend ? '#[jsonapi_node_preview]' : '#[jsonapi_node_preview_path]') +
+  (token ? ';token=[preview_token]' : '')
 
 const CREDENTIALS =
   'Check the secret, and that the consumer is confidential, allows the Client credentials grant, and has a Client credentials user.'
@@ -359,7 +360,13 @@ export const registerTarget = async ({
         data: {
           target: {
             label,
-            url: targetUrl(url, path, layouts, Boolean(useToken)),
+            url: targetUrl(
+              url,
+              path,
+              layouts,
+              Boolean(useToken),
+              Boolean(backend)
+            ),
           },
           ...(layouts.length ? { layouts: [...new Set(layouts)] } : {}),
         },
