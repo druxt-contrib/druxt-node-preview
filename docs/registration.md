@@ -112,7 +112,10 @@ site, so a frontend can't hand its own site's secret to another one by
 mistake. The target reads with a token, because a path would name the wrong
 site. The module also accepts previews from the `backend` origin, so editors
 must open that Drupal site at exactly that origin: the same scheme, host and
-port. A preview from any other origin is refused.
+port. A preview from any other origin is refused. The page fetches from the
+`backend` without the Druxt client, whose options are for `druxt.baseUrl`.
+Nuxt writes the backend into the page when it builds, so set it for the build
+as well as for `nuxt start`. Only registration needs the secret.
 
 The `backend` requests use none of the `druxt.axios` agents, so a client
 certificate for `druxt.baseUrl` stays there. If the `backend` site uses a
