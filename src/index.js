@@ -36,15 +36,18 @@ const toOrigin = (url) => {
  *
  * @param {*} url - The URL as set.
  *
- * @returns {string} Its scheme and host, or the value without anything before
- *   an "@" when it isn't a URL.
+ * @returns {string} Its scheme and host, or, when it doesn't parse, the value
+ *   without a user name and password.
  */
 const forLog = (url) => {
   try {
     const { protocol, host } = new URL(url)
     return protocol + '//' + host
   } catch {
-    return String(url).replace(/^[^/]*@/, '')
+    // Drop a user name and password before the host, after a scheme or not.
+    return String(url)
+      .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, '$1')
+      .replace(/^[^/@]*@/, '')
   }
 }
 

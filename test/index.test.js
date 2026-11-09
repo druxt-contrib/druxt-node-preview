@@ -181,13 +181,27 @@ describe('DruxtNodePreview module', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     const context = buildContext({
       baseUrl: "https://admin:hunter2@x'+y.example/path",
-      nodePreview: { origins: ["https://bob:password@y'+z.example"] },
+      // A URL the parser refuses still loses its user name and password.
+      nodePreview: {
+        origins: [
+          "https://bob:password@y'+z.example",
+          'https://eve:pa55@host:8_0',
+        ],
+      },
     })
     NuxtModule.call(context)
     const logged = warn.mock.calls.map(([message]) => message).join('\n')
     expect(logged).toContain("x'+y.example")
     expect(logged).toContain("y'+z.example")
-    for (const secret of ['admin', 'hunter2', 'bob', 'password']) {
+    expect(logged).toContain('host:8_0')
+    for (const secret of [
+      'admin',
+      'hunter2',
+      'bob',
+      'password',
+      'eve',
+      'pa55',
+    ]) {
       expect(logged).not.toContain(secret)
     }
     warn.mockRestore()
