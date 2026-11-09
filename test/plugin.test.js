@@ -474,6 +474,22 @@ describe('$druxtNodePreview plugin', () => {
     const { injected } = buildPlugin()
     expect(injected.name).toBe('druxtNodePreview')
     expect(injected.value.token()).toBe(null)
+    // The page then says the fragment has no preview endpoint.
+    expect(injected.value.endpoint()).toBe(null)
+    window.location.hash = ''
+  })
+
+  test('a kept token that is not two strings is not used', () => {
+    for (const planted of ['"x"', '{"endpoint":1,"token":2}', 'null']) {
+      window.sessionStorage.setItem('druxtNodePreview.token', planted)
+      window.location.hash = `#${ENDPOINT}`
+      expect(buildPlugin().injected.value.token()).toBe(null)
+    }
+    window.sessionStorage.setItem(
+      'druxtNodePreview.token',
+      JSON.stringify({ endpoint: ENDPOINT, token: 7 })
+    )
+    expect(buildPlugin().injected.value.token()).toBe(null)
     window.location.hash = ''
   })
 

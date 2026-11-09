@@ -302,7 +302,13 @@ export default ({ app, store }, inject) => {
     endpoint: () => {
       const hash = (window.location.hash || '').slice(1)
       if (!hash) return null
-      return repair(fragment(hash)[0])
+      try {
+        return repair(fragment(hash)[0])
+      } catch {
+        // A fragment that doesn't decode, such as "#section%", has no
+        // endpoint, so the page says so.
+        return null
+      }
     },
 
     /**
@@ -350,6 +356,14 @@ export default ({ app, store }, inject) => {
         } catch {
           kept = null
         }
+        // Use only what this plugin stored: an endpoint and a token.
+        if (
+          !kept ||
+          typeof kept.endpoint !== 'string' ||
+          typeof kept.token !== 'string'
+        ) {
+          kept = null
+        }
       }
       // A kept token that has expired would fail where the session might
       // not, so the page drops it.
@@ -374,8 +388,10 @@ export default ({ app, store }, inject) => {
      * The request goes through the Druxt client, with credentials. The site's
      * request interceptors apply, and the editor's session cookie goes with
      * it. A path stays a path. The client resolves it against its own base
-     * URL, and interceptors that decide by path still see it. A register
-     * backend is the exception: it gets a plain request without the client.
+     * URL, and interceptors that decide by path still see it. Only the
+     * page's own origin and druxt.baseUrl's use the client, because its
+     * options are for druxt.baseUrl. Any other origin, such as a register
+     * backend or one in the origins option, gets a plain request.
      *
      * @param {string} endpoint - The JSON:API Node Preview endpoint.
      *
