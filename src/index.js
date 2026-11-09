@@ -45,9 +45,10 @@ const forLog = (url) => {
     return protocol + '//' + host
   } catch {
     // Drop a user name and password before the host, after a scheme or not.
+    // Up to the last "@" before the path, because a password can hold one.
     return String(url)
-      .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i, '$1')
-      .replace(/^[^/@]*@/, '')
+      .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1')
+      .replace(/^[^/?#]*@/, '')
   }
 }
 

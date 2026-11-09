@@ -35,7 +35,10 @@ const addDirective = (res, name, directive) => {
   const existing = res.getHeader ? res.getHeader(name) : undefined
   const directives = [existing]
     .flat()
-    .flatMap((value) => String(value || '').split(','))
+    // A comma inside a quoted value, such as private="a,b", is not a break.
+    .flatMap((value) =>
+      String(value || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+    )
     .map((value) => value.trim())
     .filter(Boolean)
   if (!directives.includes(directive)) directives.push(directive)

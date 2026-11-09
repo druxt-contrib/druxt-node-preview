@@ -186,6 +186,8 @@ describe('DruxtNodePreview module', () => {
         origins: [
           "https://bob:password@y'+z.example",
           'https://eve:pa55@host:8_0',
+          // A password can hold an "@" of its own.
+          'https://mal:p@ssw0rd@host:9_0',
         ],
       },
     })
@@ -201,6 +203,8 @@ describe('DruxtNodePreview module', () => {
       'password',
       'eve',
       'pa55',
+      'mal',
+      'ssw0rd',
     ]) {
       expect(logged).not.toContain(secret)
     }

@@ -477,6 +477,16 @@ describe('registerTarget', () => {
       expect(message).not.toContain('hunter2')
     })
 
+    test('a password with an "@" in the base URL', async () => {
+      answer(json(404, {}))
+      await registerTarget(
+        settings({ baseUrl: 'https://admin:p@ssw0rd@cms.example.com' })
+      )
+      const [message] = warn.mock.calls[0]
+      expect(message).toContain('https://cms.example.com/oauth/token')
+      expect(message).not.toContain('ssw0rd')
+    })
+
     test('no base URL', async () => {
       await expect(
         registerTarget(settings({ baseUrl: undefined }))

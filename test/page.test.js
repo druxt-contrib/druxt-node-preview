@@ -63,6 +63,20 @@ describe('DruxtNodePreviewPage', () => {
     )
   })
 
+  test('a quoted directive value keeps its commas', () => {
+    const headers = { 'cache-control': 'private="set-cookie,x-id", max-age=0' }
+    const res = {
+      headersSent: false,
+      getHeader: (name) => headers[name.toLowerCase()],
+      setHeader: jest.fn(),
+    }
+    Page.middleware({ res })
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private="set-cookie,x-id", max-age=0, no-store'
+    )
+  })
+
   test('the server render keeps robots directives it already has', () => {
     const headers = { 'x-robots-tag': 'nofollow, nosnippet' }
     const res = {

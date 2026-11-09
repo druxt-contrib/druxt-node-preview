@@ -484,7 +484,8 @@ export const registerTarget = async ({
         (text, value) => text.split(value).join('[hidden]'),
         error.message
       )
-      .replace(/(\/\/)[^/\s@]+@/g, '$1')
+      // Up to the last "@" before the path, because a password can hold one.
+      .replace(/(\/\/)[^/?#\s]*@/g, '$1')
     warn(`Could not register the preview target: ${message}`)
     return 'failed'
   }
