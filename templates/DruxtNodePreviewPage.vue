@@ -25,6 +25,24 @@
 import DruxtNodePreview from './druxt-node-preview.vue'
 
 /**
+ * Adds a directive to a response header, and keeps the ones the site set.
+ *
+ * @param {object} res - The server response.
+ * @param {string} name - The header, such as Cache-Control.
+ * @param {string} directive - The directive to add, such as no-store.
+ */
+const addDirective = (res, name, directive) => {
+  const existing = res.getHeader ? res.getHeader(name) : undefined
+  const directives = [existing]
+    .flat()
+    .flatMap((value) => String(value || '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+  if (!directives.includes(directive)) directives.push(directive)
+  res.setHeader(name, directives.join(', '))
+}
+
+/**
  * Renders a Drupal node preview.
  *
  * This page only works in the browser. The preview endpoint arrives in the
@@ -57,16 +75,8 @@ export default {
    */
   middleware({ res }) {
     if (!res || res.headersSent) return
-    res.setHeader('Cache-Control', 'no-store')
-    // Keep any robots directives the site has set, and add noindex.
-    const existing = res.getHeader ? res.getHeader('X-Robots-Tag') : undefined
-    const directives = [existing]
-      .flat()
-      .flatMap((value) => String(value || '').split(','))
-      .map((value) => value.trim())
-      .filter(Boolean)
-    if (!directives.includes('noindex')) directives.push('noindex')
-    res.setHeader('X-Robots-Tag', directives.join(', '))
+    addDirective(res, 'Cache-Control', 'no-store')
+    addDirective(res, 'X-Robots-Tag', 'noindex')
   },
 
   data: () => ({

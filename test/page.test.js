@@ -43,6 +43,20 @@ describe('DruxtNodePreviewPage', () => {
     expect(sent.setHeader).not.toHaveBeenCalled()
   })
 
+  test('the server render keeps cache directives it already has', () => {
+    const headers = { 'cache-control': 'no-transform, max-age=60' }
+    const res = {
+      headersSent: false,
+      getHeader: (name) => headers[name.toLowerCase()],
+      setHeader: jest.fn(),
+    }
+    Page.middleware({ res })
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'no-transform, max-age=60, no-store'
+    )
+  })
+
   test('the server render keeps robots directives it already has', () => {
     const headers = { 'x-robots-tag': 'nofollow, nosnippet' }
     const res = {
