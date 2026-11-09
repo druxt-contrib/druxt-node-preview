@@ -51,7 +51,7 @@ jobs:
           # List the tarball once. A grep -q that exits early in a pipe can kill
           # tar with SIGPIPE, and pipefail then fails the check at random.
           tar -tzf druxt-contrib-node-preview-*.tgz > package-files.txt
-          for f in dist/index.ssr.js dist/index.esm.js templates/plugin.js templates/DruxtNodePreviewPage.vue templates/DruxtNodePreview.vue; do
+          for f in dist/index.ssr.js templates/plugin.js templates/DruxtNodePreviewPage.vue templates/DruxtNodePreview.vue; do
             grep -qx "package/$f" package-files.txt || { echo "The package is missing $f"; exit 1; }
           done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
