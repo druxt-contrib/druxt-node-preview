@@ -245,6 +245,49 @@ describe('registerTarget', () => {
     expect(clients[1].axios.defaults.timeout).toBe(60000)
   })
 
+  // Druxt 0.25 takes its axios options from Nuxt's own axios option, for
+  // @nuxtjs/axios, and deprecates druxt.axios.
+  test("applies Nuxt's axios options before druxt.axios", async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    await registerTarget(
+      settings({
+        axios: { timeout: 60000, headers: { 'X-Site': 'yes' }, proxy: true },
+        druxt: { baseUrl: BASE, axios: { timeout: 1000, params: { a: 'b' } } },
+      })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.headers['X-Site']).toBe('yes')
+    expect(defaults.params).toEqual({ a: 'b' })
+    // Its proxy turns on @nuxtjs/proxy. It is not an axios proxy.
+    expect(defaults.proxy).toBeUndefined()
+
+    // druxt.axios fills what Nuxt's option leaves out.
+    await registerTarget(
+      settings({ axios: {}, druxt: { axios: { timeout: 1000 } } })
+    )
+    expect(clients[1].axios.defaults.timeout).toBe(1000)
+  })
+
+  test("a backend gets only the timeout of Nuxt's axios options", async () => {
+    answer(tokenOk(), saved())
+    await registerTarget(
+      settings({
+        backend: 'https://other.example.com',
+        token: true,
+        axios: {
+          timeout: 60000,
+          headers: { Authorization: 'Basic c2l0ZQ==' },
+          proxy: true,
+        },
+      })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.headers).toEqual({})
+    expect(defaults.proxy).toBeUndefined()
+  })
+
   test('sends no site credentials to a backend', async () => {
     answer(tokenOk(), saved())
     const druxt = {

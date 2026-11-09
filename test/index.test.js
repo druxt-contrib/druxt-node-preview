@@ -345,6 +345,40 @@ describe('DruxtNodePreview module', () => {
       })
     })
 
+    test("registers with Nuxt's axios options", async () => {
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
+      jest.useFakeTimers()
+      try {
+        const context = buildContext({
+          baseUrl: 'https://cms.example.com',
+          nodePreview: {
+            register: {
+              url: 'https://www.example.com',
+              consumer: 'frontend',
+            },
+          },
+        })
+        context.options.axios = { timeout: 60000 }
+        NuxtModule.call(context)
+        request
+          .mockResolvedValueOnce({
+            status: 200,
+            text: JSON.stringify({ access_token: 't' }),
+          })
+          .mockResolvedValueOnce({
+            status: 200,
+            text: JSON.stringify({ targets: [], layouts: [] }),
+          })
+        await context.hooks.ready()
+        expect(DruxtClient.mock.results[0].value.axios.defaults.timeout).toBe(
+          60000
+        )
+      } finally {
+        jest.clearAllTimers()
+        jest.useRealTimers()
+      }
+    })
+
     test('registers once per process, even when Nuxt runs the module again', async () => {
       process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
       process.env.DRUXT_NODE_PREVIEW_CLIENT_ID = 'frontend'

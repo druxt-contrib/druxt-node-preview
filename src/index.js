@@ -264,6 +264,8 @@ const NuxtModule = function (moduleOptions = {}) {
         registerTarget({
           ...register,
           druxt: (this.options || {}).druxt || {},
+          // Druxt takes its axios options from here, for @nuxtjs/axios.
+          axios: (this.options || {}).axios,
           baseUrl: ((this.options || {}).druxt || {}).baseUrl,
           path: options.path,
           layouts: pluginOptions.layouts,

@@ -9,9 +9,10 @@ import { DruxtClient } from 'druxt'
  * the target with the same label, or adds it, and records the time. The module
  * sends the PATCH again on a timer, so a running frontend's target stays active.
  *
- * Every request goes through a DruxtClient, so the site's `druxt.axios` options
- * apply, but a backend gets only their timeout and proxy, and nothing from the
- * global axios defaults. No request follows a redirect, so the secret never
+ * Every request goes through a DruxtClient, so the site's axios options apply.
+ * Those are Nuxt's own `axios` option, as Druxt reads it, then `druxt.axios`.
+ * A backend gets only their timeout and proxy, and nothing from the global
+ * axios defaults. No request follows a redirect, so the secret never
  * goes to another host. A failure never stops Nuxt, and no message holds the
  * secret or the token.
  */
@@ -292,6 +293,27 @@ const forBackend = (defaults, options) => {
 }
 
 /**
+ * Returns the site's axios options for druxt.baseUrl.
+ *
+ * Druxt 0.25 takes them from Nuxt's own `axios` option, for @nuxtjs/axios,
+ * and deprecates `druxt.axios`. So Nuxt's option wins, and `druxt.axios` fills
+ * what it leaves out. Nuxt's `proxy` turns on @nuxtjs/proxy. It is not an
+ * axios proxy, so it is left out.
+ *
+ * @param {*} nuxt - Nuxt's axios option.
+ * @param {*} druxt - The druxt.axios option.
+ *
+ * @returns {object} The axios options.
+ */
+const siteAxios = (nuxt, druxt) => {
+  const object = (value) =>
+    value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  // eslint-disable-next-line no-unused-vars
+  const { proxy, ...own } = object(nuxt)
+  return { ...object(druxt), ...own }
+}
+
+/**
  * Sends a request, and returns the data of a 200 response.
  *
  * @param {object} client - The DruxtClient.
@@ -325,8 +347,8 @@ const send = async (client, config, hints, site) => {
  * It never throws. A failure prints a warning.
  *
  * @param {object} settings - The settings from resolveRegister(), with the
- *   baseUrl and druxt options, and the path and layouts options. A backend
- *   wins over baseUrl.
+ *   baseUrl and druxt options, Nuxt's axios option, and the path and layouts
+ *   options. A backend wins over baseUrl.
  *
  * @returns {Promise<string>} "registered" or "failed".
  */
@@ -335,6 +357,7 @@ export const registerTarget = async ({
   backend,
   token: useToken,
   druxt = {},
+  axios,
   url,
   label,
   consumer,
@@ -359,10 +382,11 @@ export const registerTarget = async ({
     // The site's axios options are for druxt.baseUrl, so a backend gets only
     // the timeout and proxy. Its client starts from axios's own defaults, so
     // its adapter is the one axios chose.
-    const { timeout = TIMEOUT, proxy } = druxt.axios || {}
+    const site = siteAxios(axios, druxt.axios)
+    const { timeout = TIMEOUT, proxy } = site
     const client = new DruxtClient(base, {
       ...druxt,
-      axios: backend ? { timeout } : { timeout: TIMEOUT, ...druxt.axios },
+      axios: backend ? { timeout } : { timeout: TIMEOUT, ...site },
     })
     if (backend) {
       forBackend(client.axios.defaults, {
