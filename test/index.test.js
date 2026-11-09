@@ -345,9 +345,10 @@ describe('DruxtNodePreview module', () => {
       })
     })
 
-    test("registers with Nuxt's axios options", async () => {
+    test("registers with Nuxt's axios options, on the interval set", async () => {
       process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
       jest.useFakeTimers()
+      const every = jest.spyOn(global, 'setInterval')
       try {
         const context = buildContext({
           baseUrl: 'https://cms.example.com',
@@ -355,6 +356,7 @@ describe('DruxtNodePreview module', () => {
             register: {
               url: 'https://www.example.com',
               consumer: 'frontend',
+              interval: 600000,
             },
           },
         })
@@ -370,10 +372,12 @@ describe('DruxtNodePreview module', () => {
             text: JSON.stringify({ targets: [], layouts: [] }),
           })
         await context.hooks.ready()
+        expect(every.mock.calls[0][1]).toBe(600000)
         expect(DruxtClient.mock.results[0].value.axios.defaults.timeout).toBe(
           60000
         )
       } finally {
+        every.mockRestore()
         jest.clearAllTimers()
         jest.useRealTimers()
       }

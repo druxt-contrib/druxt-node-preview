@@ -86,6 +86,7 @@ describe('resolveRegister', () => {
       consumer: 'from-env',
       secret: SECRET,
       token: false,
+      interval: HEARTBEAT,
     })
   })
 
@@ -110,6 +111,7 @@ describe('resolveRegister', () => {
       consumer: 'frontend',
       secret: SECRET,
       token: false,
+      interval: HEARTBEAT,
     })
   })
 
@@ -154,6 +156,41 @@ describe('resolveRegister', () => {
     // The option can come from druxt.nodePreview or the module options.
     expect(output).toContain('Ignored register.secret.')
   })
+
+  test('registers again every 6 hours by default', () => {
+    expect(resolveRegister(true, ENV).interval).toBe(HEARTBEAT)
+  })
+
+  test('takes the interval from the options or the environment', () => {
+    expect(resolveRegister({ interval: 600000 }, ENV).interval).toBe(600000)
+    expect(
+      resolveRegister(
+        { interval: 600000 },
+        { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_INTERVAL: ' 60000 ' }
+      ).interval
+    ).toBe(60000)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  test.each([[59999], [1.5], ['600000'], [-60000], [Infinity]])(
+    'the interval %j is ignored with a warning',
+    (interval) => {
+      const register = resolveRegister({ interval }, ENV)
+      expect(register.interval).toBe(HEARTBEAT)
+      expect(warn.mock.calls[0][0]).toBe(
+        '[druxt-node-preview] Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, at least 60000.'
+      )
+    }
+  )
+
+  test.each([['10m'], ['600000.5'], ['1e6'], ['59999']])(
+    'the interval %j from the environment is ignored with a warning',
+    (value) => {
+      const env = { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_INTERVAL: value }
+      expect(resolveRegister(true, env).interval).toBe(HEARTBEAT)
+      expect(warn.mock.calls[0][0]).toContain('register.interval')
+    }
+  )
 })
 
 describe('targetUrl', () => {
@@ -529,6 +566,13 @@ describe('registerOnce', () => {
     await expect(registerOnce(second)).resolves.toBe('registered')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).not.toHaveBeenCalled()
+  })
+
+  test('registers again on the interval it is given', () => {
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    jest.advanceTimersByTime(60000 * 3)
+    expect(run).toHaveBeenCalledTimes(4)
   })
 
   test('registers again on the heartbeat, within the inactive limit', () => {

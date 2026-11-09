@@ -21,10 +21,14 @@ const PREFIX = '[druxt-node-preview] '
 const TIMEOUT = 5000
 
 /**
- * The time between registrations, in milliseconds. Consumer Node Preview marks
- * a target inactive after a day, so a failed attempt or two does no harm.
+ * The default time between registrations, in milliseconds. Consumer Node
+ * Preview marks a target inactive after a day by default, so a failed attempt
+ * or two does no harm.
  */
 export const HEARTBEAT = 6 * 60 * 60 * 1000
+
+// The shortest time between registrations, in milliseconds.
+const MIN_INTERVAL = 60 * 1000
 
 const warn = (message) => console.warn(PREFIX + message)
 const info = (message) => console.info(PREFIX + message)
@@ -114,11 +118,15 @@ const rawBackend = (options, env) =>
  * reads the preview with a token instead of the editor's session. It is on
  * with a backend, and off otherwise.
  *
+ * DRUXT_NODE_PREVIEW_REGISTER_INTERVAL, or `interval`, is the time between
+ * registrations in milliseconds. A site whose Consumer Node Preview marks
+ * targets inactive sooner than a day sets it lower.
+ *
  * @param {*} value - The `register` option.
  * @param {object} env - The environment, such as process.env.
  *
- * @returns {object|null} The url, label, consumer, secret and token, and
- *   the backend when there is one.
+ * @returns {object|null} The url, label, consumer, secret, token and
+ *   interval, and the backend when there is one.
  */
 export const resolveRegister = (value, env) => {
   if (value === undefined || value === null || value === false) return null
@@ -173,6 +181,25 @@ export const resolveRegister = (value, env) => {
     return null
   }
 
+  // A bad interval is not worth stopping registration for.
+  const envInterval = fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_INTERVAL')
+  const rawInterval =
+    envInterval === undefined
+      ? options.interval
+      : /^\d+$/.test(envInterval)
+        ? Number(envInterval)
+        : NaN
+  let interval = HEARTBEAT
+  if (rawInterval !== undefined) {
+    if (Number.isInteger(rawInterval) && rawInterval >= MIN_INTERVAL) {
+      interval = rawInterval
+    } else {
+      warn(
+        `Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, at least ${MIN_INTERVAL}.`
+      )
+    }
+  }
+
   // The default label is the frontend's host, so local, staging and production
   // each keep their own target on a shared consumer.
   const label =
@@ -185,6 +212,7 @@ export const resolveRegister = (value, env) => {
     consumer,
     secret,
     token,
+    interval,
     ...(backend ? { backend } : {}),
   }
 }
@@ -461,21 +489,22 @@ export const registerTarget = async ({
 }
 
 /**
- * Starts the registration once per process, and repeats it on the heartbeat.
+ * Starts the registration once per process, and repeats it on an interval.
  *
  * Nuxt can run the module more than once in a process, such as when nuxt dev
  * restarts after a config change. The state lives on the process, so a fresh
  * copy of this file finds it too. The timer does not keep a build alive.
  *
  * @param {Function} run - Starts the registration, and returns its promise.
+ * @param {number} [interval] - The milliseconds between registrations.
  *
  * @returns {Promise<string>} The first run's promise.
  */
-export const registerOnce = (run) => {
+export const registerOnce = (run, interval = HEARTBEAT) => {
   const key = Symbol.for('druxt-node-preview.register')
   if (!process[key]) {
     process[key] = run()
-    setInterval(run, HEARTBEAT).unref?.()
+    setInterval(run, interval).unref?.()
   }
   return process[key]
 }

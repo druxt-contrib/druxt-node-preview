@@ -260,16 +260,18 @@ const NuxtModule = function (moduleOptions = {}) {
   // before the request ends. Each request has a short timeout.
   if (register && this.nuxt) {
     this.nuxt.hook('ready', () =>
-      registerOnce(() =>
-        registerTarget({
-          ...register,
-          druxt: (this.options || {}).druxt || {},
-          // Druxt takes its axios options from here, for @nuxtjs/axios.
-          axios: (this.options || {}).axios,
-          baseUrl: ((this.options || {}).druxt || {}).baseUrl,
-          path: options.path,
-          layouts: pluginOptions.layouts,
-        })
+      registerOnce(
+        () =>
+          registerTarget({
+            ...register,
+            druxt: (this.options || {}).druxt || {},
+            // Druxt takes its axios options from here, for @nuxtjs/axios.
+            axios: (this.options || {}).axios,
+            baseUrl: ((this.options || {}).druxt || {}).baseUrl,
+            path: options.path,
+            layouts: pluginOptions.layouts,
+          }),
+        register.interval
       )
     )
   }
