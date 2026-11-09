@@ -58,7 +58,15 @@ export default {
   middleware({ res }) {
     if (!res || res.headersSent) return
     res.setHeader('Cache-Control', 'no-store')
-    res.setHeader('X-Robots-Tag', 'noindex')
+    // Keep any robots directives the site has set, and add noindex.
+    const existing = res.getHeader ? res.getHeader('X-Robots-Tag') : undefined
+    const directives = [existing]
+      .flat()
+      .flatMap((value) => String(value || '').split(','))
+      .map((value) => value.trim())
+      .filter(Boolean)
+    if (!directives.includes('noindex')) directives.push('noindex')
+    res.setHeader('X-Robots-Tag', directives.join(', '))
   },
 
   data: () => ({
@@ -68,9 +76,12 @@ export default {
   }),
 
   // A generated site writes this page out as a file, with no headers. The
-  // tag asks search engines not to index it there too.
+  // tag asks search engines not to index it there too. It has its own key, so
+  // a robots tag the site sets stays in the page as well.
   head: () => ({
-    meta: [{ hid: 'robots', name: 'robots', content: 'noindex' }],
+    meta: [
+      { hid: 'druxt-node-preview-robots', name: 'robots', content: 'noindex' },
+    ],
   }),
 
   computed: {
