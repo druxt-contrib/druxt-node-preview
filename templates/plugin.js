@@ -28,6 +28,28 @@ export default ({ app, store }, inject) => {
   // Where the tab keeps the token for a reload.
   const TOKEN_STORE = 'druxtNodePreview.token'
 
+  /**
+   * Whether a token is a JWT whose expiry has passed.
+   *
+   * A token without a readable expiry counts as live, and Drupal decides.
+   *
+   * @param {string} token - The token.
+   *
+   * @returns {boolean} True when it has expired.
+   */
+  const expired = (token) => {
+    try {
+      const part = String(token)
+        .split('.')[1]
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+      const { exp } = JSON.parse(window.atob(part))
+      return typeof exp === 'number' && exp * 1000 <= Date.now()
+    } catch {
+      return false
+    }
+  }
+
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -315,6 +337,16 @@ export default ({ app, store }, inject) => {
           kept = JSON.parse(window.sessionStorage.getItem(TOKEN_STORE))
         } catch {
           kept = null
+        }
+      }
+      // A kept token that has expired would fail where the session might
+      // not, so the page drops it.
+      if (kept && expired(kept.token)) {
+        kept = null
+        try {
+          window.sessionStorage.removeItem(TOKEN_STORE)
+        } catch {
+          // Storage can be off.
         }
       }
       return kept && kept.endpoint === endpoint ? kept.token : null

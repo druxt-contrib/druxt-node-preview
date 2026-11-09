@@ -40,7 +40,9 @@ store.
 
 As soon as the page starts, it takes the token out of its address, so an error
 tracker, session recorder or analytics page view on the page doesn't log it.
-The tab's session storage keeps it, so a reload of the frame still previews.
+Where the browser allows session storage, the tab keeps it there, so a reload
+of the frame still previews until the token expires. Without it, a reload needs
+a fresh preview from Drupal.
 A script that runs before the page's plugins, such as one in the page head,
 can still read the token. Keep such scripts off the preview route, or stop
 them recording its address.

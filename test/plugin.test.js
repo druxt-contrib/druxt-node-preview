@@ -496,6 +496,33 @@ describe('$druxtNodePreview plugin', () => {
     window.sessionStorage.clear()
   })
 
+  test('a kept token that has expired is dropped', () => {
+    const jwt = (exp) =>
+      [
+        'e30',
+        Buffer.from(JSON.stringify({ exp })).toString('base64url'),
+        's',
+      ].join('.')
+    const expired = jwt(Math.floor(Date.now() / 1000) - 60)
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=${expired}`
+    )
+    buildPlugin()
+    // A reload of the page would send the expired token. The session reads it.
+    const { injected } = buildPlugin()
+    expect(injected.value.token()).toBe(null)
+    expect(window.sessionStorage.getItem('druxtNodePreview.token')).toBe(null)
+
+    // A token that has not expired, or that has no expiry, is kept.
+    const live = jwt(Math.floor(Date.now() / 1000) + 600)
+    window.location.hash = `#${ENDPOINT};token=${live}`
+    buildPlugin()
+    expect(buildPlugin().injected.value.token()).toBe(live)
+    window.location.hash = ''
+  })
+
   test('seed stores the resource and every include', () => {
     const { injected, commits } = buildPlugin()
     const doc = {
