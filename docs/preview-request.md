@@ -2,7 +2,10 @@
 
 The page fetches through the Druxt client, `$druxt.axios`, with credentials.
 The site's request interceptors apply, such as one that adds a workspace
-header. Without the Druxt client, the page uses `window.fetch`. That resolves
+header. A request to any origin other than the frontend's own or
+`druxt.baseUrl`'s uses `window.fetch` instead, because the client's options
+are for `druxt.baseUrl`. So does any request on a site without the Druxt
+client. `window.fetch` resolves
 a path against the frontend's own origin, not `druxt.baseUrl`, so a site
 without the Druxt client or a proxy needs the full URL,
 `[jsonapi_node_preview]`, with Drupal's origin in the `origins` option.
@@ -34,6 +37,15 @@ address. If a check fails, the page shows an error and puts nothing in the
 store.
 
 ## Previews with a token
+
+As soon as the page starts, it takes the token out of its address, so an error
+tracker, session recorder or analytics page view on the page doesn't log it.
+Where the browser allows session storage, the tab keeps it there, so a reload
+of the frame still previews until the token expires. Without it, a reload needs
+a fresh preview from Drupal.
+A script that runs before the page's plugins, such as one in the page head,
+can still read the token. Keep such scripts off the preview route, or stop
+them recording its address.
 
 A frontend on another domain, or on a tunnel, never gets the editor's session.
 It can read the preview with a token instead. Use Consumer Node Preview's

@@ -9,17 +9,62 @@ import {
 /**
  * Returns a URL's origin, or null when it is not an http(s) URL.
  *
+ * The URL parser lets a host name hold characters such as quotes and
+ * brackets. The origin goes into the page's script, so its host must be plain:
+ * letters, digits, dots, hyphens and underscores, or an IPv6 address in
+ * brackets. A local host such as a Docker service name can hold underscores,
+ * and a fully qualified host name can end in a dot.
+ *
  * @param {*} url - The URL.
  *
  * @returns {string|null} The origin.
  */
 const toOrigin = (url) => {
   try {
-    const { origin, protocol } = new URL(url)
-    return ['http:', 'https:'].includes(protocol) ? origin : null
+    const { origin, protocol, hostname } = new URL(url)
+    const plain = /^([a-z0-9_-]+\.)*[a-z0-9_-]+\.?$|^\[[0-9a-f:.]+\]$/
+    return ['http:', 'https:'].includes(protocol) && plain.test(hostname)
+      ? origin
+      : null
   } catch {
     return null
   }
+}
+
+/**
+ * Returns a URL as a warning may show it, without a user name or password.
+ *
+ * @param {*} url - The URL as set.
+ *
+ * @returns {string} Its scheme and host, or the value without anything before
+ *   an "@" when it isn't a URL.
+ */
+const forLog = (url) => {
+  try {
+    const { protocol, host } = new URL(url)
+    return protocol + '//' + host
+  } catch {
+    return String(url).replace(/^[^/]*@/, '')
+  }
+}
+
+/**
+ * Says why a URL can't be an origin.
+ *
+ * @param {*} url - A URL that toOrigin() refused.
+ *
+ * @returns {string} The reason, and what to use instead.
+ */
+const originProblem = (url) => {
+  try {
+    const { hostname, protocol } = new URL(url)
+    if (['http:', 'https:'].includes(protocol)) {
+      return `Its host, "${hostname}", may only have letters, digits, dots, hyphens and _, or be an IPv6 address in brackets.`
+    }
+  } catch {
+    // Not a URL at all.
+  }
+  return 'Use a full http(s) URL, such as "https://cms.example.com".'
 }
 
 /**
@@ -168,9 +213,7 @@ const NuxtModule = function (moduleOptions = {}) {
   const listed = (Array.isArray(options.origins) ? options.origins : []).filter(
     (url) => {
       if (toOrigin(url)) return true
-      warn(
-        `Ignored the origin "${url}". Use a full http(s) URL, such as "https://cms.example.com".`
-      )
+      warn(`Ignored the origin "${forLog(url)}". ${originProblem(url)}`)
       return false
     }
   )
@@ -178,9 +221,9 @@ const NuxtModule = function (moduleOptions = {}) {
   const pluginOptions = {
     include: toInclude(options.include),
     origins: [],
-    // The page fetches from these without the Druxt client, whose options are
-    // for druxt.baseUrl.
-    backends: backend ? [toOrigin(backend)] : [],
+    // Druxt's Drupal origin. The page fetches from any other origin without
+    // the Druxt client, whose options are for druxt.baseUrl.
+    drupal: null,
     layouts: toLayouts(options.layouts),
   }
 
@@ -188,8 +231,18 @@ const NuxtModule = function (moduleOptions = {}) {
   // or an origin the site lists. druxt-site sets druxt.baseUrl from its own
   // module options, and Nuxt can run it after this module. So the origins are
   // read again once every module has run. The template reads them at build.
+  let reported
   const setOrigins = () => {
     const baseUrl = ((this.options || {}).druxt || {}).baseUrl
+    pluginOptions.drupal = toOrigin(baseUrl)
+    // The page can't use the Druxt client for a baseUrl it can't read, so say
+    // so once, rather than let previews fall back without a word.
+    if (baseUrl && !pluginOptions.drupal && reported !== baseUrl) {
+      reported = baseUrl
+      warn(
+        `Ignored druxt.baseUrl "${forLog(baseUrl)}" for previews. ${originProblem(baseUrl)}`
+      )
+    }
     pluginOptions.origins = [
       ...new Set([baseUrl, backend, ...listed].map(toOrigin).filter(Boolean)),
     ]

@@ -14,13 +14,57 @@
 export default ({ app, store }, inject) => {
   const include = JSON.parse('<%= JSON.stringify(options.include) %>')
   const layouts = JSON.parse('<%= JSON.stringify(options.layouts) %>')
-  // Origins the preview may come from, besides this site's own.
+  // Origins the preview may come from, besides this site's own. The module
+  // only passes origins with plain host names, so none can end the string.
   const origins = JSON.parse('<%= JSON.stringify(options.origins) %>')
-  // Register backends, which the page fetches from without the Druxt client.
-  const backends = JSON.parse('<%= JSON.stringify(options.backends) %>')
+  // Druxt's Drupal origin. The page fetches from any other origin without the
+  // Druxt client, whose options are for druxt.baseUrl.
+  const drupal = JSON.parse('<%= JSON.stringify(options.drupal) %>')
 
   // Separates the endpoint from a token in the URL fragment.
   const TOKEN_MARK = ';token='
+  // The token, once read and taken out of the address, and its endpoint.
+  let kept = null
+  // vue-router normalises the URL, which collapses the double slash after the
+  // scheme inside the fragment. This repairs it.
+  const repair = (endpoint) =>
+    String(endpoint).replace(/^(https?):\/(?!\/)/, '$1://')
+
+  /**
+   * Returns the endpoint and the token from a raw URL fragment.
+   *
+   * It throws on a fragment that doesn't decode, such as "#section%".
+   *
+   * @param {string} raw - The fragment, without the "#".
+   *
+   * @returns {string[]} The endpoint, then the token if there is one.
+   */
+  const fragment = (raw) => decodeURIComponent(raw).split(TOKEN_MARK)
+
+  // Where the tab keeps the token for a reload.
+  const TOKEN_STORE = 'druxtNodePreview.token'
+
+  /**
+   * Whether a token is a JWT whose expiry has passed.
+   *
+   * A token without a readable expiry counts as live, and Drupal decides.
+   *
+   * @param {string} token - The token.
+   *
+   * @returns {boolean} True when it has expired.
+   */
+  const expired = (token) => {
+    try {
+      const part = String(token)
+        .split('.')[1]
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+      const { exp } = JSON.parse(window.atob(part))
+      return typeof exp === 'number' && exp * 1000 <= Date.now()
+    } catch {
+      return false
+    }
+  }
 
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
@@ -224,14 +268,14 @@ export default ({ app, store }, inject) => {
    *
    * @returns {Error} The error.
    */
-  const failure = (url, status, body) =>
-    new Error(
-      'Preview request failed with HTTP ' +
-        status +
-        ' for ' +
-        url +
-        (body ? ': ' + String(body).slice(0, 300) : '')
+  const failure = (url, status, body) => {
+    // An HTML error page says nothing useful in a one-line message.
+    const text = String(body || '').trim()
+    const shown = text && !text.startsWith('<') ? ': ' + text.slice(0, 300) : ''
+    return new Error(
+      'Preview request failed with HTTP ' + status + ' for ' + url + shown
     )
+  }
 
   const plugin = {
     /**
@@ -258,11 +302,13 @@ export default ({ app, store }, inject) => {
     endpoint: () => {
       const hash = (window.location.hash || '').slice(1)
       if (!hash) return null
-      // vue-router normalises the URL, which collapses the double slash after
-      // the scheme inside the fragment. Repair it.
-      return decodeURIComponent(hash)
-        .split(TOKEN_MARK)[0]
-        .replace(/^(https?):\/(?!\/)/, '$1://')
+      try {
+        return repair(fragment(hash)[0])
+      } catch {
+        // A fragment that doesn't decode, such as "#section%", has no
+        // endpoint, so the page says so.
+        return null
+      }
     },
 
     /**
@@ -271,10 +317,74 @@ export default ({ app, store }, inject) => {
      * @returns {string|null} The token, or null when the preview reads with
      *   the editor's session.
      */
-    token: () =>
-      decodeURIComponent((window.location.hash || '').slice(1)).split(
-        TOKEN_MARK
-      )[1] || null,
+    token: () => {
+      const raw = (window.location.hash || '').slice(1)
+      let endpoint
+      let token
+      try {
+        ;[endpoint, token] = fragment(raw)
+      } catch {
+        // A fragment that is not a preview, such as "#section%", has no token.
+        return null
+      }
+      if (token) {
+        // An expired token would fail where the session might not, so the
+        // page leaves it out. It still leaves the address.
+        const live = !expired(token)
+        if (live) {
+          kept = { endpoint, token }
+          // A reload starts a new page from the address without the token.
+          // The tab's session storage keeps it for that, out of any logged
+          // address.
+          try {
+            window.sessionStorage.setItem(TOKEN_STORE, JSON.stringify(kept))
+          } catch {
+            // Storage can be off. The page then reads the token only once.
+          }
+        }
+        // An error tracker or session recorder on the page can log the
+        // address. So the token leaves it, and the page keeps it here.
+        // The address keeps the endpoint as it was encoded, so it reads the
+        // same when the page loads again.
+        const at = raw.indexOf(TOKEN_MARK)
+        const address =
+          at === -1 ? encodeURIComponent(endpoint) : raw.slice(0, at)
+        window.history.replaceState(
+          window.history.state,
+          '',
+          window.location.pathname + window.location.search + '#' + address
+        )
+        return live ? token : null
+      }
+      if (!kept) {
+        try {
+          kept = JSON.parse(window.sessionStorage.getItem(TOKEN_STORE))
+        } catch {
+          kept = null
+        }
+        // Use only what this plugin stored: an endpoint and a token.
+        if (
+          !kept ||
+          typeof kept.endpoint !== 'string' ||
+          typeof kept.token !== 'string'
+        ) {
+          kept = null
+        }
+      }
+      // A kept token that has expired would fail where the session might
+      // not, so the page drops it.
+      if (kept && expired(kept.token)) {
+        kept = null
+        try {
+          window.sessionStorage.removeItem(TOKEN_STORE)
+        } catch {
+          // Storage can be off.
+        }
+      }
+      return kept && repair(kept.endpoint) === repair(endpoint)
+        ? kept.token
+        : null
+    },
 
     /**
      * Fetches the preview document with the editor's session, or with the
@@ -284,8 +394,10 @@ export default ({ app, store }, inject) => {
      * The request goes through the Druxt client, with credentials. The site's
      * request interceptors apply, and the editor's session cookie goes with
      * it. A path stays a path. The client resolves it against its own base
-     * URL, and interceptors that decide by path still see it. A register
-     * backend is the exception: it gets a plain request without the client.
+     * URL, and interceptors that decide by path still see it. Only the
+     * page's own origin and druxt.baseUrl's use the client, because its
+     * options are for druxt.baseUrl. Any other origin, such as a register
+     * backend or one in the origins option, gets a plain request.
      *
      * @param {string} endpoint - The JSON:API Node Preview endpoint.
      *
@@ -300,9 +412,10 @@ export default ({ app, store }, inject) => {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       }
       // The Druxt client's defaults, such as its auth, are for druxt.baseUrl.
-      // A backend gets a plain request instead.
+      // Any other origin gets a plain request instead.
       const { origin } = new URL(url, window.location.origin)
-      const client = backends.includes(origin) ? null : (app.$druxt || {}).axios
+      const own = origin === window.location.origin || origin === drupal
+      const client = own ? (app.$druxt || {}).axios : null
       if (client) {
         let response
         try {
@@ -314,9 +427,11 @@ export default ({ app, store }, inject) => {
           const failed = error.response || {}
           if (!failed.status) throw error
           const body =
-            typeof failed.data === 'string'
-              ? failed.data
-              : JSON.stringify(failed.data || '')
+            failed.data === undefined || failed.data === null
+              ? ''
+              : typeof failed.data === 'string'
+                ? failed.data
+                : JSON.stringify(failed.data)
           throw failure(url, failed.status, body)
         }
         checkType((response.headers || {})['content-type'])
@@ -370,6 +485,17 @@ export default ({ app, store }, inject) => {
       store.commit('druxtNodePreview/start', doc.data.id)
       return { type: doc.data.type, id: doc.data.id }
     },
+  }
+
+  // Take the token out of the address before anything on the page reads it,
+  // such as an analytics page view. The plugin keeps it for the preview. The
+  // router's first navigation writes back the address it started with, so
+  // take it out again once the router is ready. A script that runs before
+  // this plugin, such as one in the page head or an earlier plugin, can still
+  // read the token.
+  if (typeof window !== 'undefined') {
+    plugin.token()
+    if (app.router && app.router.onReady) app.router.onReady(plugin.token)
   }
 
   inject('druxtNodePreview', plugin)

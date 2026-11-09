@@ -53,7 +53,7 @@ describe('DruxtNodePreview module', () => {
     expect(context.routes[0].name).toBe('druxt-node-preview')
     expect(context.addedPlugins[0].options.include).toEqual([])
     expect(context.addedPlugins[0].options.origins).toEqual([])
-    expect(context.addedPlugins[0].options.backends).toEqual([])
+    expect(context.addedPlugins[0].options.drupal).toBe(null)
     expect(context.addedPlugins[0].options.layouts).toEqual([])
   })
 
@@ -125,6 +125,72 @@ describe('DruxtNodePreview module', () => {
     expect(context.addedPlugins[0].options.origins).toEqual([
       'https://late.example.com',
     ])
+    expect(context.addedPlugins[0].options.drupal).toBe(
+      'https://late.example.com'
+    )
+  })
+
+  test('an origin whose host has other characters is refused', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({
+      baseUrl: "https://x'+alert(1)+'.example",
+      nodePreview: {
+        origins: [
+          "https://y'+alert(2)+'.example",
+          'https://cms.example.com:8443',
+          'http://[::1]:3000',
+          'http://drupal_web:8080',
+          'https://fqdn.example.com.',
+        ],
+      },
+    })
+    NuxtModule.call(context)
+    const { options } = context.addedPlugins[0]
+    expect(options.origins).toEqual([
+      'https://cms.example.com:8443',
+      'http://[::1]:3000',
+      'http://drupal_web:8080',
+      'https://fqdn.example.com.',
+    ])
+    expect(options.drupal).toBe(null)
+    // The warning names the host, not the URL's shape, which is fine.
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `Ignored the origin "https://y'+alert(2)+'.example". Its host, "y'+alert(2)+'.example", may only have`
+      )
+    )
+    // A druxt.baseUrl the page can't use is reported too.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('druxt.baseUrl'))
+    warn.mockRestore()
+  })
+
+  test('an unusable druxt.baseUrl is reported once', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({ baseUrl: "https://x'+y.example" })
+    NuxtModule.call(context)
+    // Nuxt runs modules:done after every module, and the origins are read again.
+    context.hooks['modules:done']()
+    const reported = warn.mock.calls.filter(([message]) =>
+      message.includes('Ignored druxt.baseUrl')
+    )
+    expect(reported).toHaveLength(1)
+    warn.mockRestore()
+  })
+
+  test('a warning never prints the user name or password in a URL', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({
+      baseUrl: "https://admin:hunter2@x'+y.example/path",
+      nodePreview: { origins: ["https://bob:password@y'+z.example"] },
+    })
+    NuxtModule.call(context)
+    const logged = warn.mock.calls.map(([message]) => message).join('\n')
+    expect(logged).toContain("x'+y.example")
+    expect(logged).toContain("y'+z.example")
+    for (const secret of ['admin', 'hunter2', 'bob', 'password']) {
+      expect(logged).not.toContain(secret)
+    }
+    warn.mockRestore()
   })
 
   test('an origin that is not an http(s) URL is reported, not dropped quietly', () => {
@@ -343,7 +409,7 @@ describe('DruxtNodePreview module', () => {
         'https://cms.example.com',
         'https://other.example.com',
       ])
-      expect(options.backends).toEqual(['https://other.example.com'])
+      expect(options.drupal).toBe('https://cms.example.com')
       warn.mockRestore()
     })
 

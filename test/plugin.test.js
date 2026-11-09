@@ -16,8 +16,8 @@ const loadPlugin = (include = ['field_body']) => {
       '\'["https://example.com","https://backend.example.com"]\''
     )
     .replace(
-      "'<%= JSON.stringify(options.backends) %>'",
-      '\'["https://backend.example.com"]\''
+      "'<%= JSON.stringify(options.drupal) %>'",
+      '\'"https://example.com"\''
     )
     .replace(
       "'<%= JSON.stringify(options.layouts) %>'",
@@ -75,6 +75,9 @@ const buildPlugin = (app = {}, include = undefined) => {
 
 // cspell:ignore cnpt
 describe('$druxtNodePreview plugin', () => {
+  // A token kept for a reload must not reach the next test.
+  beforeEach(() => window.sessionStorage.clear())
+
   test('injects the plugin', () => {
     const { injected } = buildPlugin()
     expect(injected.name).toBe('druxtNodePreview')
@@ -241,6 +244,9 @@ describe('$druxtNodePreview plugin', () => {
       })
     )
 
+    // The first page took the token out of the address. A new page load gets
+    // it again from Drupal.
+    window.location.hash = `#${ENDPOINT};token=cnpt.a.b`
     window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
     await buildPlugin().injected.value.fetch(ENDPOINT)
     expect(window.fetch).toHaveBeenCalledWith(
@@ -294,6 +300,60 @@ describe('$druxtNodePreview plugin', () => {
       },
     })
 
+    window.location.hash = ''
+  })
+
+  test('a listed origin goes without the Druxt client, with the session', async () => {
+    const doc = { data: { type: 'node--article', id: UUID } }
+    const other = `https://backend.example.com/jsonapi/node/article/${UUID}/preview`
+    const get = jest.fn().mockResolvedValue(axiosJsonApi(doc))
+    window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    await injected.value.fetch(other)
+
+    expect(get).not.toHaveBeenCalled()
+    expect(window.fetch).toHaveBeenCalledWith(
+      `${other}?include=field_body`,
+      expect.objectContaining({ credentials: 'include' })
+    )
+  })
+
+  test('the token leaves the address once the page has read it', () => {
+    const { injected } = buildPlugin()
+    window.history.replaceState(
+      { key: 'kept' },
+      '',
+      `/druxt/node/preview?vm=full#${ENDPOINT};token=cnpt.a.b`
+    )
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    expect(window.location.search).toBe('?vm=full')
+    expect(window.history.state).toEqual({ key: 'kept' })
+    // The page reads it again when it comes back, such as after keep-alive.
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.endpoint()).toBe(ENDPOINT)
+
+    // A new preview address brings its own token, or none.
+    window.location.hash = `#/jsonapi/node/article/${UUID}/preview`
+    expect(injected.value.token()).toBe(null)
+    window.location.hash = ''
+  })
+
+  test('the address keeps its encoding when the token leaves it', () => {
+    const { injected } = buildPlugin()
+    const encoded = `${ENDPOINT}?include=a%2526b`
+    window.location.hash = `#${encoded};token=cnpt.a.b`
+    const before = injected.value.endpoint()
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(window.location.hash).toBe(`#${encoded}`)
+    expect(injected.value.endpoint()).toBe(before)
+
+    // An encoded token mark leaves an encoded address that reads the same.
+    window.location.hash = '#' + encodeURIComponent(`${encoded};token=cnpt.c.d`)
+    const encodedBefore = injected.value.endpoint()
+    expect(injected.value.token()).toBe('cnpt.c.d')
+    expect(window.location.hash).not.toContain('token')
+    expect(injected.value.endpoint()).toBe(encodedBefore)
     window.location.hash = ''
   })
 
@@ -352,6 +412,165 @@ describe('$druxtNodePreview plugin', () => {
       .fn()
       .mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
     await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(/403.*denied/)
+  })
+
+  test('a failed response that is an HTML page leaves the page out', async () => {
+    const { injected } = buildPlugin()
+    window.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () =>
+        '\n <!DOCTYPE html>\n<html lang="en"><body>Denied</body></html>',
+    })
+    const error = await injected.value.fetch(ENDPOINT).catch((e) => e)
+    expect(error.message).toBe(
+      `Preview request failed with HTTP 401 for ${ENDPOINT}?include=field_body`
+    )
+  })
+
+  test('the token leaves the address as soon as the plugin starts', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#https://evil.invalid/jsonapi/node/article/${UUID}/preview;token=cnpt.a.b`
+    )
+    const { injected } = buildPlugin()
+    // Before anything checks or fetches the endpoint.
+    expect(window.location.hash).not.toContain('token')
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    window.location.hash = ''
+  })
+
+  test('the token leaves the address again once the router is ready', () => {
+    const address = `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
+    window.history.replaceState(null, '', address)
+    let ready
+    const { injected } = buildPlugin({
+      router: {
+        beforeEach: () => {},
+        onReady: (callback) => (ready = callback),
+      },
+    })
+    // Its first navigation writes the address it started with back.
+    window.history.replaceState(null, '', address)
+    ready()
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    window.location.hash = ''
+  })
+
+  test('a client error without a body adds nothing after the address', async () => {
+    const error = Object.assign(new Error('x'), { response: { status: 500 } })
+    const get = jest.fn().mockRejectedValue(error)
+    const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+    const failed = await injected.value.fetch(ENDPOINT).catch((e) => e)
+    expect(failed.message).toBe(
+      `Preview request failed with HTTP 500 for ${ENDPOINT}?include=field_body`
+    )
+  })
+
+  test('a malformed fragment does not stop the plugin starting', () => {
+    window.location.hash = '#section%'
+    const { injected } = buildPlugin()
+    expect(injected.name).toBe('druxtNodePreview')
+    expect(injected.value.token()).toBe(null)
+    // The page then says the fragment has no preview endpoint.
+    expect(injected.value.endpoint()).toBe(null)
+    window.location.hash = ''
+  })
+
+  test('an expired token in the address is not used, and leaves it', () => {
+    const exp = Math.floor(Date.now() / 1000) - 60
+    const expired = [
+      'e30',
+      Buffer.from(JSON.stringify({ exp })).toString('base64url'),
+      's',
+    ].join('.')
+    // The plugin started on another page, and the router opens the preview.
+    window.history.replaceState(null, '', '/')
+    const { injected } = buildPlugin()
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=${expired}`
+    )
+    expect(injected.value.token()).toBe(null)
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    expect(window.sessionStorage.getItem('druxtNodePreview.token')).toBe(null)
+    window.location.hash = ''
+  })
+
+  test('a kept token that is not two strings is not used', () => {
+    for (const planted of ['"x"', '{"endpoint":1,"token":2}', 'null']) {
+      window.sessionStorage.setItem('druxtNodePreview.token', planted)
+      window.location.hash = `#${ENDPOINT}`
+      expect(buildPlugin().injected.value.token()).toBe(null)
+    }
+    window.sessionStorage.setItem(
+      'druxtNodePreview.token',
+      JSON.stringify({ endpoint: ENDPOINT, token: 7 })
+    )
+    expect(buildPlugin().injected.value.token()).toBe(null)
+    window.location.hash = ''
+  })
+
+  test('the token survives a reload of the page, out of the address', () => {
+    window.sessionStorage.clear()
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
+    )
+    buildPlugin()
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    // A reload starts a new page, with the address the token left.
+    const { injected } = buildPlugin()
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    // Another preview address gets no token from it.
+    window.location.hash = `#/jsonapi/node/article/${UUID}/preview`
+    expect(injected.value.token()).toBe(null)
+    window.location.hash = ''
+    window.sessionStorage.clear()
+  })
+
+  test('a kept token that has expired is dropped', () => {
+    const jwt = (exp) =>
+      [
+        'e30',
+        Buffer.from(JSON.stringify({ exp })).toString('base64url'),
+        's',
+      ].join('.')
+    const expired = jwt(Math.floor(Date.now() / 1000) - 60)
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=${expired}`
+    )
+    buildPlugin()
+    // A reload of the page would send the expired token. The session reads it.
+    const { injected } = buildPlugin()
+    expect(injected.value.token()).toBe(null)
+    expect(window.sessionStorage.getItem('druxtNodePreview.token')).toBe(null)
+
+    // A token that has not expired, or that has no expiry, is kept.
+    const live = jwt(Math.floor(Date.now() / 1000) + 600)
+    window.location.hash = `#${ENDPOINT};token=${live}`
+    buildPlugin()
+    expect(buildPlugin().injected.value.token()).toBe(live)
+    window.location.hash = ''
+  })
+
+  test('the kept token matches an address whose scheme the router collapsed', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
+    )
+    const { injected } = buildPlugin()
+    window.location.hash = '#' + ENDPOINT.replace('https://', 'https:/')
+    expect(injected.value.endpoint()).toBe(ENDPOINT)
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    window.location.hash = ''
   })
 
   test('seed stores the resource and every include', () => {
