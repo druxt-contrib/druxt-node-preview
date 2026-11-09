@@ -472,22 +472,82 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = ''
   })
 
-  test('the token leaves the address again once the router is ready', () => {
-    const address = `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
-    window.history.replaceState(null, '', address)
-    let ready
-    const { injected } = buildPlugin({
-      router: {
-        beforeEach: () => {},
-        onReady: (callback) => (ready = callback),
-      },
+  describe('a route with a token', () => {
+    let guard
+    let preview
+
+    beforeEach(() => {
+      window.history.replaceState(null, '', '/')
+      preview = buildPlugin({
+        router: {
+          currentRoute: { name: 'druxt-node-preview' },
+          beforeEach: (fn) => {
+            guard = fn
+          },
+        },
+      })
     })
-    // Its first navigation writes the address it started with back.
-    window.history.replaceState(null, '', address)
-    ready()
-    expect(window.location.hash).toBe(`#${ENDPOINT}`)
-    expect(injected.value.takeToken()).toBe('cnpt.a.b')
-    window.location.hash = ''
+
+    const route = (hash) => ({
+      name: 'druxt-node-preview',
+      path: '/druxt/node/preview',
+      query: { vm: 'full' },
+      hash,
+    })
+
+    // Nuxt builds its first route from the address before the plugin starts.
+    // A page view tracker on the router would log the token from it.
+    test('is replaced by the same route without the token', () => {
+      const next = jest.fn()
+      guard(route(`#${ENDPOINT};token=cnpt.a.b`), { name: null }, next)
+      expect(next).toHaveBeenCalledWith({
+        path: '/druxt/node/preview',
+        query: { vm: 'full' },
+        hash: `#${ENDPOINT}`,
+        replace: true,
+      })
+      // The plugin keeps the token for the route it redirects to.
+      window.history.replaceState(null, '', `/druxt/node/preview#${ENDPOINT}`)
+      expect(preview.injected.value.takeToken()).toBe('cnpt.a.b')
+
+      // The new route has no token, so it goes ahead.
+      const again = jest.fn()
+      guard(route(`#${ENDPOINT}`), { name: null }, again)
+      expect(again).toHaveBeenCalledWith()
+    })
+
+    test('keeps the encoding of the endpoint', () => {
+      const encoded = encodeURIComponent(ENDPOINT)
+      const next = jest.fn()
+      guard(route(`#${encoded};token=cnpt.a.b`), { name: null }, next)
+      expect(next.mock.calls[0][0].hash).toBe(`#${encoded}`)
+
+      // An encoded token mark goes too.
+      const marked = jest.fn()
+      guard(
+        route('#' + encodeURIComponent(`${ENDPOINT};token=cnpt.a.b`)),
+        { name: null },
+        marked
+      )
+      expect(marked.mock.calls[0][0].hash).toBe(`#${encoded}`)
+    })
+
+    test('from a page Drupal does not frame leaves, and is not kept', () => {
+      toTop()
+      const next = jest.fn()
+      guard(route(`#${ENDPOINT};token=cnpt.a.b`), { name: null }, next)
+      expect(next.mock.calls[0][0].hash).toBe(`#${ENDPOINT}`)
+      window.history.replaceState(null, '', `/druxt/node/preview#${ENDPOINT}`)
+      expect(preview.injected.value.takeToken()).toBe(null)
+    })
+
+    test('other fragments go ahead', () => {
+      const next = jest.fn()
+      guard(route('#section'), { name: null }, next)
+      guard(route('#section%'), { name: null }, next)
+      guard(route(''), { name: null }, next)
+      expect(next.mock.calls).toEqual([[], [], []])
+    })
   })
 
   describe('a token from the fragment', () => {

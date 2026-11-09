@@ -342,6 +342,20 @@ export default ({ app, store }, inject) => {
       } else if (isPreview(to)) {
         leaving = false
       }
+      // Nuxt builds its first route from the address before this plugin
+      // takes the token out. So the route keeps the token, and a page view
+      // tracker on the router would log it. This takes it out of the route,
+      // and the redirect takes it out of the address too.
+      const taken = to.hash ? take(to.hash.slice(1)) : null
+      if (taken) {
+        next({
+          path: to.path,
+          query: to.query,
+          hash: '#' + taken.address,
+          replace: true,
+        })
+        return
+      }
       next()
     })
   }
@@ -583,14 +597,10 @@ export default ({ app, store }, inject) => {
 
   // Take the token out of the address before anything on the page reads it,
   // such as an analytics page view. The plugin keeps it for the preview. The
-  // router's first navigation writes back the address it started with, so
-  // take it out again once the router is ready. A script that runs before
-  // this plugin, such as one in the page head or an earlier plugin, can still
-  // read the token.
-  if (typeof window !== 'undefined') {
-    plugin.takeToken()
-    if (app.router && app.router.onReady) app.router.onReady(plugin.takeToken)
-  }
+  // router guard above then takes it out of the first route. A script that
+  // runs before this plugin, such as one in the page head or an earlier
+  // plugin, can still read the token.
+  if (typeof window !== 'undefined') plugin.takeToken()
 
   inject('druxtNodePreview', plugin)
 }
