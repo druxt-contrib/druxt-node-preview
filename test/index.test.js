@@ -164,6 +164,19 @@ describe('DruxtNodePreview module', () => {
     warn.mockRestore()
   })
 
+  test('an unusable druxt.baseUrl is reported once', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({ baseUrl: "https://x'+y.example" })
+    NuxtModule.call(context)
+    // Nuxt runs modules:done after every module, and the origins are read again.
+    context.hooks['modules:done']()
+    const reported = warn.mock.calls.filter(([message]) =>
+      message.includes('Ignored druxt.baseUrl')
+    )
+    expect(reported).toHaveLength(1)
+    warn.mockRestore()
+  })
+
   test('a warning never prints the user name or password in a URL', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     const context = buildContext({
