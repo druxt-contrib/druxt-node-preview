@@ -476,13 +476,15 @@ export const registerTarget = async ({
     info(`Registered the preview target "${label}" on "${consumer}".`)
     return 'registered'
   } catch (error) {
-    // Hides the secret and the token, should Drupal ever echo one of them.
+    // Hides the secret and the token, should Drupal ever echo one of them,
+    // and any user name and password in a URL, such as druxt.baseUrl's.
     const message = [secret, token]
       .filter(Boolean)
       .reduce(
         (text, value) => text.split(value).join('[hidden]'),
         error.message
       )
+      .replace(/(\/\/)[^/\s@]+@/g, '$1')
     warn(`Could not register the preview target: ${message}`)
     return 'failed'
   }
