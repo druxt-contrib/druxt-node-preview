@@ -66,13 +66,37 @@ const toBaseUrl = (value) => {
  * @returns {string|null} The backend's base URL.
  */
 export const resolveBackend = (value, env) => {
-  if (value !== true && (typeof value !== 'object' || !value)) return null
-  if (Array.isArray(value)) return null
-  const options = value === true ? {} : value
-  const raw =
-    fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_BACKEND') || options.backend
+  const options = registerOptions(value)
+  const raw = options && rawBackend(options, env)
   return raw ? toBaseUrl(raw) : null
 }
+
+/**
+ * Returns the register option as an object, or null when it is not one.
+ *
+ * `true` takes every setting from the environment, so it is an empty object.
+ *
+ * @param {*} value - The `register` option.
+ *
+ * @returns {object|null} The options.
+ */
+const registerOptions = (value) => {
+  if (value === true) return {}
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : null
+}
+
+/**
+ * Returns the backend as set, before it is checked. The environment wins.
+ *
+ * @param {object} options - The register options.
+ * @param {object} env - The environment.
+ *
+ * @returns {*} The backend's URL as set, or undefined.
+ */
+const rawBackend = (options, env) =>
+  fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_BACKEND') || options.backend
 
 /**
  * Returns the registration settings, or null when registration is off.
@@ -97,11 +121,11 @@ export const resolveBackend = (value, env) => {
  */
 export const resolveRegister = (value, env) => {
   if (value === undefined || value === null || value === false) return null
-  if (value !== true && (typeof value !== 'object' || Array.isArray(value))) {
+  const options = registerOptions(value)
+  if (!options) {
     warn('Ignored the register option. Use true or an object.')
     return null
   }
-  const options = value === true ? {} : value
 
   // Say nothing about the value, so the message cannot give it away.
   if (options.secret !== undefined) {
@@ -113,10 +137,9 @@ export const resolveRegister = (value, env) => {
   const url = toBaseUrl(fromEnv(env, 'DRUXT_NODE_PREVIEW_URL') || options.url)
   const consumer =
     fromEnv(env, 'DRUXT_NODE_PREVIEW_CLIENT_ID') || options.consumer
-  const rawBackend =
-    fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_BACKEND') || options.backend
-  const backend = rawBackend ? toBaseUrl(rawBackend) : null
-  const secretName = rawBackend
+  const setBackend = rawBackend(options, env)
+  const backend = setBackend ? toBaseUrl(setBackend) : null
+  const secretName = setBackend
     ? 'DRUXT_NODE_PREVIEW_REGISTER_SECRET'
     : 'DRUXT_NODE_PREVIEW_CLIENT_SECRET'
   const secret = fromEnv(env, secretName)
@@ -138,7 +161,7 @@ export const resolveRegister = (value, env) => {
       "DRUXT_NODE_PREVIEW_URL or register.url must be the frontend's full http(s) URL, with no query or fragment.",
     (typeof consumer !== 'string' || !/^[\x21-\x7e]+$/.test(consumer)) &&
       "DRUXT_NODE_PREVIEW_CLIENT_ID or register.consumer must be the consumer's client ID.",
-    rawBackend &&
+    setBackend &&
       !backend &&
       "DRUXT_NODE_PREVIEW_REGISTER_BACKEND or register.backend must be the Drupal site's full http(s) URL.",
     token === undefined &&

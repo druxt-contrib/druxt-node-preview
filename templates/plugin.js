@@ -30,6 +30,17 @@ export default ({ app, store }, inject) => {
   const repair = (endpoint) =>
     String(endpoint).replace(/^(https?):\/(?!\/)/, '$1://')
 
+  /**
+   * Returns the endpoint and the token from a raw URL fragment.
+   *
+   * It throws on a fragment that doesn't decode, such as "#section%".
+   *
+   * @param {string} raw - The fragment, without the "#".
+   *
+   * @returns {string[]} The endpoint, then the token if there is one.
+   */
+  const fragment = (raw) => decodeURIComponent(raw).split(TOKEN_MARK)
+
   // Where the tab keeps the token for a reload.
   const TOKEN_STORE = 'druxtNodePreview.token'
 
@@ -291,7 +302,7 @@ export default ({ app, store }, inject) => {
     endpoint: () => {
       const hash = (window.location.hash || '').slice(1)
       if (!hash) return null
-      return repair(decodeURIComponent(hash).split(TOKEN_MARK)[0])
+      return repair(fragment(hash)[0])
     },
 
     /**
@@ -305,7 +316,7 @@ export default ({ app, store }, inject) => {
       let endpoint
       let token
       try {
-        ;[endpoint, token] = decodeURIComponent(raw).split(TOKEN_MARK)
+        ;[endpoint, token] = fragment(raw)
       } catch {
         // A fragment that is not a preview, such as "#section%", has no token.
         return null
