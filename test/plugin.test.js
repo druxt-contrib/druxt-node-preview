@@ -1,37 +1,4 @@
-const fs = require('fs')
-const path = require('path')
-
-// The template placeholder is replaced by Nuxt at build time. Replace it the
-// same way here, so the plugin source stays testable as-is. The only module
-// syntax in the plugin is its default export.
-const loadPlugin = (include = ['field_body']) => {
-  const source = fs
-    .readFileSync(path.resolve(__dirname, '../templates/plugin.js'), 'utf8')
-    .replace(
-      "'<%= JSON.stringify(options.include) %>'",
-      "'" + JSON.stringify(include) + "'"
-    )
-    .replace(
-      "'<%= JSON.stringify(options.origins) %>'",
-      '\'["https://example.com","https://backend.example.com"]\''
-    )
-    .replace(
-      "'<%= JSON.stringify(options.drupal) %>'",
-      '\'"https://example.com"\''
-    )
-    .replace(
-      "'<%= JSON.stringify(options.layouts) %>'",
-      '\'["default","preview"]\''
-    )
-    .replace('export default', 'module.exports.default =')
-  const mod = { exports: {} }
-  new Function('module', 'exports', 'require', source)(
-    mod,
-    mod.exports,
-    require
-  )
-  return mod.exports
-}
+const { loadPlugin } = require('./helpers/plugin-template')
 
 // Drupal gives every JSON:API resource a UUID, and Consumer Node Preview
 // points at /{entity type}/{bundle}/{uuid}/preview.
@@ -67,9 +34,12 @@ const buildPlugin = (app = {}, include = undefined) => {
     },
   }
   let injected
-  loadPlugin(include).default({ app, store }, (name, value) => {
-    injected = { name, value }
-  })
+  loadPlugin(include === undefined ? {} : { include }).default(
+    { app, store },
+    (name, value) => {
+      injected = { name, value }
+    }
+  )
   return { commits, injected, modules }
 }
 
@@ -412,6 +382,19 @@ describe('$druxtNodePreview plugin', () => {
       .fn()
       .mockResolvedValue({ ok: false, status: 403, text: async () => 'denied' })
     await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(/403.*denied/)
+  })
+
+  test('a failed response whose body cannot be read still reports the status', async () => {
+    const { injected } = buildPlugin()
+    window.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: () => Promise.reject(new Error('aborted')),
+    })
+    const error = await injected.value.fetch(ENDPOINT).catch((e) => e)
+    expect(error.message).toBe(
+      `Preview request failed with HTTP 502 for ${ENDPOINT}?include=field_body`
+    )
   })
 
   test('a failed response that is an HTML page leaves the page out', async () => {

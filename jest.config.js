@@ -1,10 +1,13 @@
 module.exports = {
   collectCoverage: true,
   // The module and the templates Nuxt loads from it. templates/plugin.js is
-  // not listed: test/plugin.test.js fills in its Nuxt placeholders and runs it
-  // through new Function, which Jest cannot instrument, so it would always
-  // read as uncovered.
-  collectCoverageFrom: ['src/**/*.{js,vue}', 'templates/**/*.vue'],
+  // a lodash template, so test/helpers/plugin-template.js renders it as Nuxt
+  // does, into coverage/templates/plugin.js, and the tests load that copy.
+  collectCoverageFrom: [
+    'src/**/*.{js,vue}',
+    'templates/**/*.vue',
+    'coverage/templates/plugin.js',
+  ],
   coverageDirectory: './coverage/',
   // A floor, not a target. These are the measured baseline of the current
   // tests, rounded down: raise them as coverage genuinely improves, and never
