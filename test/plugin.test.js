@@ -523,6 +523,19 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = ''
   })
 
+  test('the kept token matches an address whose scheme the router collapsed', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
+    )
+    const { injected } = buildPlugin()
+    window.location.hash = '#' + ENDPOINT.replace('https://', 'https:/')
+    expect(injected.value.endpoint()).toBe(ENDPOINT)
+    expect(injected.value.token()).toBe('cnpt.a.b')
+    window.location.hash = ''
+  })
+
   test('seed stores the resource and every include', () => {
     const { injected, commits } = buildPlugin()
     const doc = {

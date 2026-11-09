@@ -32,6 +32,25 @@ const toOrigin = (url) => {
 }
 
 /**
+ * Says why a URL can't be an origin.
+ *
+ * @param {*} url - A URL that toOrigin() refused.
+ *
+ * @returns {string} The reason, and what to use instead.
+ */
+const originProblem = (url) => {
+  try {
+    const { hostname, protocol } = new URL(url)
+    if (['http:', 'https:'].includes(protocol)) {
+      return `Its host, "${hostname}", may only have letters, digits, dots, hyphens and _, or be an IPv6 address in brackets.`
+    }
+  } catch {
+    // Not a URL at all.
+  }
+  return 'Use a full http(s) URL, such as "https://cms.example.com".'
+}
+
+/**
  * Reports an option value the module drops.
  *
  * @param {string} message - What was dropped, and what to use instead.
@@ -177,9 +196,7 @@ const NuxtModule = function (moduleOptions = {}) {
   const listed = (Array.isArray(options.origins) ? options.origins : []).filter(
     (url) => {
       if (toOrigin(url)) return true
-      warn(
-        `Ignored the origin "${url}". Use a full http(s) URL, such as "https://cms.example.com".`
-      )
+      warn(`Ignored the origin "${url}". ${originProblem(url)}`)
       return false
     }
   )
@@ -197,9 +214,18 @@ const NuxtModule = function (moduleOptions = {}) {
   // or an origin the site lists. druxt-site sets druxt.baseUrl from its own
   // module options, and Nuxt can run it after this module. So the origins are
   // read again once every module has run. The template reads them at build.
+  let reported
   const setOrigins = () => {
     const baseUrl = ((this.options || {}).druxt || {}).baseUrl
     pluginOptions.drupal = toOrigin(baseUrl)
+    // The page can't use the Druxt client for a baseUrl it can't read, so say
+    // so once, rather than let previews fall back without a word.
+    if (baseUrl && !pluginOptions.drupal && reported !== baseUrl) {
+      reported = baseUrl
+      warn(
+        `Ignored druxt.baseUrl "${baseUrl}" for previews. ${originProblem(baseUrl)}`
+      )
+    }
     pluginOptions.origins = [
       ...new Set([baseUrl, backend, ...listed].map(toOrigin).filter(Boolean)),
     ]

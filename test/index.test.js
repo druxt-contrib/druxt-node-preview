@@ -153,7 +153,14 @@ describe('DruxtNodePreview module', () => {
       'https://fqdn.example.com.',
     ])
     expect(options.drupal).toBe(null)
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('alert(2)'))
+    // The warning names the host, not the URL's shape, which is fine.
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `Ignored the origin "https://y'+alert(2)+'.example". Its host, "y'+alert(2)+'.example", may only have`
+      )
+    )
+    // A druxt.baseUrl the page can't use is reported too.
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('druxt.baseUrl'))
     warn.mockRestore()
   })
 

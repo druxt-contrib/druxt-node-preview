@@ -25,6 +25,11 @@ export default ({ app, store }, inject) => {
   const TOKEN_MARK = ';token='
   // The token, once read and taken out of the address, and its endpoint.
   let kept = null
+  // vue-router normalises the URL, which collapses the double slash after the
+  // scheme inside the fragment. This repairs it.
+  const repair = (endpoint) =>
+    String(endpoint).replace(/^(https?):\/(?!\/)/, '$1://')
+
   // Where the tab keeps the token for a reload.
   const TOKEN_STORE = 'druxtNodePreview.token'
 
@@ -286,11 +291,7 @@ export default ({ app, store }, inject) => {
     endpoint: () => {
       const hash = (window.location.hash || '').slice(1)
       if (!hash) return null
-      // vue-router normalises the URL, which collapses the double slash after
-      // the scheme inside the fragment. Repair it.
-      return decodeURIComponent(hash)
-        .split(TOKEN_MARK)[0]
-        .replace(/^(https?):\/(?!\/)/, '$1://')
+      return repair(decodeURIComponent(hash).split(TOKEN_MARK)[0])
     },
 
     /**
@@ -349,7 +350,9 @@ export default ({ app, store }, inject) => {
           // Storage can be off.
         }
       }
-      return kept && kept.endpoint === endpoint ? kept.token : null
+      return kept && repair(kept.endpoint) === repair(endpoint)
+        ? kept.token
+        : null
     },
 
     /**
