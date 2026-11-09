@@ -27,14 +27,23 @@ default:
   confidential:
     -
       value: true
+  # Client credentials registers the target. Authorization code lets
+  # Consumer Node Preview issue a [preview_token] for the token target.
   grant_types:
     -
       value: client_credentials
+    -
+      value: authorization_code
   # The token gets this scope by default, and the scope gives the
   # registrar role.
   scopes:
     -
       scope_id: preview_targets
+  # A preview token gets this scope. It gives the editor's administrator
+  # role, which Simple OAuth intersects with the editor's own roles.
+  authorization_code_scopes:
+    -
+      scope_id: preview_read
   third_party:
     -
       value: true
@@ -49,6 +58,10 @@ default:
     -
       label: Kept
       url: 'https://kept.example.com/preview?vm=[view_mode]#[jsonapi_node_preview]'
+    # A target that reads with a preview token. run.sh puts in the port.
+    -
+      label: 'E2E Druxt token'
+      url: 'http://localhost:FRONTEND_DRUXT_PORT/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path];token=[preview_token]'
   preview_layouts:
     -
       value: default

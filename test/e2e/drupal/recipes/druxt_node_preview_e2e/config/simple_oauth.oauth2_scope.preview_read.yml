@@ -1,0 +1,17 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - user.role.administrator
+id: preview_read
+name: preview_read
+description: 'Read node previews as the editor, with a Consumer Node Preview token.'
+grant_types:
+  authorization_code:
+    status: true
+    description: ''
+umbrella: false
+parent: null
+granularity_id: role
+granularity_configuration:
+  role: administrator
