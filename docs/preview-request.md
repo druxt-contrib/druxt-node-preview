@@ -92,10 +92,8 @@ Set them up on the target's consumer:
    **Scopes**.
 
 The **Scopes** under **Client Credentials settings** do not reach the token.
-A token without an Authorization Code scope has no scopes, and the preview
-fails with HTTP 403, "The 'access content' permission is required". A script
-that sets the consumer's grant types must keep **Authorization Code**, or the
-token is empty.
+A token without an Authorization Code scope fails with HTTP 403. See
+[Troubleshooting](troubleshooting.md#preview-request-failed-with-http-403-for---the-access-content-permission-is-required-).
 
 Without Simple OAuth, the token is empty, and the page reads with the
 editor's session.
