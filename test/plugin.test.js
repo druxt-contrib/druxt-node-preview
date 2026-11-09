@@ -660,6 +660,102 @@ describe('$druxtNodePreview plugin', () => {
     })
   })
 
+  describe('a dropped token', () => {
+    const failing = () =>
+      jest
+        .fn()
+        .mockResolvedValue({ ok: false, status: 403, text: async () => '' })
+
+    const EXPIRED =
+      'The preview token has expired. Press Preview in Drupal again.'
+
+    test('that had expired says so when the session fails too', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        `/druxt/node/preview#${ENDPOINT};token=${jwt(-60)}`
+      )
+      const { injected } = buildPlugin()
+      window.fetch = failing()
+      await expect(
+        injected.value.fetch(injected.value.endpoint())
+      ).rejects.toThrow(EXPIRED)
+
+      // A network error says so too.
+      window.fetch = jest.fn().mockRejectedValue(new TypeError('Failed'))
+      await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(EXPIRED)
+    })
+
+    test('that had expired says so through the Druxt client', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        `/druxt/node/preview#${ENDPOINT};token=${jwt(-60)}`
+      )
+      const error = Object.assign(new Error('x'), {
+        response: { status: 401 },
+      })
+      const get = jest.fn().mockRejectedValue(error)
+      const { injected } = buildPlugin({ $druxt: { axios: { get } } })
+      await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(EXPIRED)
+    })
+
+    test('that was too old says so when the session fails too', async () => {
+      const now = Date.now()
+      window.sessionStorage.setItem(
+        'druxtNodePreview.token',
+        JSON.stringify({
+          endpoint: ENDPOINT,
+          token: 'cnpt.a.b',
+          saved: now - 15 * 60 * 1000,
+        })
+      )
+      window.history.replaceState(null, '', `/druxt/node/preview#${ENDPOINT}`)
+      const { injected } = buildPlugin()
+      window.fetch = failing()
+      await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(EXPIRED)
+    })
+
+    test('that had expired lets the session read the preview', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        `/druxt/node/preview#${ENDPOINT};token=${jwt(-60)}`
+      )
+      const { injected } = buildPlugin()
+      const doc = { data: { type: 'node--article', id: UUID } }
+      window.fetch = jest.fn().mockResolvedValue(jsonApi(doc))
+      await expect(injected.value.fetch(ENDPOINT)).resolves.toBe(doc)
+    })
+
+    test('from another page keeps the usual error', async () => {
+      toTop()
+      window.history.replaceState(
+        null,
+        '',
+        `/druxt/node/preview#${ENDPOINT};token=cnpt.a.b`
+      )
+      const { injected } = buildPlugin()
+      window.fetch = failing()
+      await expect(injected.value.fetch(ENDPOINT)).rejects.toThrow(
+        'Preview request failed with HTTP 403'
+      )
+    })
+
+    test('for another endpoint keeps the usual error', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        `/druxt/node/preview#${ENDPOINT};token=${jwt(-60)}`
+      )
+      const { injected } = buildPlugin()
+      window.fetch = failing()
+      await expect(
+        injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+      ).rejects.toThrow('Preview request failed with HTTP 403')
+    })
+  })
+
   test('a client error without a body adds nothing after the address', async () => {
     const error = Object.assign(new Error('x'), { response: { status: 500 } })
     const get = jest.fn().mockRejectedValue(error)

@@ -29,6 +29,8 @@ export default ({ app, store }, inject) => {
   // The token, once read and taken out of the address, its endpoint, and
   // when it was read.
   let kept = null
+  // The endpoint whose token the page dropped because it had expired.
+  let stale = null
   // vue-router normalises the URL, which collapses the double slash after the
   // scheme inside the fragment. This repairs it.
   const repair = (endpoint) =>
@@ -152,8 +154,10 @@ export default ({ app, store }, inject) => {
     // An expired token would fail where the session might not, so the page
     // leaves it out.
     if (expired(token)) {
+      stale = repair(endpoint)
       return { address, token: null }
     }
+    stale = null
     kept = { endpoint, token, saved: Date.now() }
     // A reload starts a new page from the address without the token. The
     // tab's session storage keeps it for that, out of any logged address.
@@ -188,6 +192,7 @@ export default ({ app, store }, inject) => {
     // this plugin never stores.
     const age = kept ? Date.now() - kept.saved : 0
     if (kept && (expired(kept.token) || age < 0 || age >= TOKEN_LIFETIME)) {
+      stale = repair(kept.endpoint)
       forget()
     }
     return kept && repair(kept.endpoint) === repair(endpoint)
@@ -333,6 +338,7 @@ export default ({ app, store }, inject) => {
         leaving = true
         // The token was for this preview only.
         forget()
+        stale = null
         if (seeded.length) {
           for (const { type, id } of seeded.splice(0)) {
             store.commit('druxt/flushResource', { type, id })
@@ -406,6 +412,10 @@ export default ({ app, store }, inject) => {
     const merged = [...new Set([...current, ...configured])]
     return base + '?' + [...params, 'include=' + merged.join(',')].join('&')
   }
+
+  // The error when an expired token was dropped and the session failed too.
+  const EXPIRED =
+    'The preview token has expired. Press Preview in Drupal again.'
 
   /**
    * Builds an error that carries the status and the start of the body.
@@ -515,6 +525,10 @@ export default ({ app, store }, inject) => {
       const uuid = checkEndpoint(endpoint)
       const url = withInclude(endpoint)
       const token = plugin.takeToken()
+      // The page dropped this preview's token because it had expired. When
+      // the session can't read the preview either, the editor needs a new
+      // token, so the error says that.
+      const renew = !token && stale !== null && stale === repair(endpoint)
       const headers = {
         Accept: 'application/vnd.api+json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -532,6 +546,7 @@ export default ({ app, store }, inject) => {
             withCredentials: !token,
           })
         } catch (error) {
+          if (renew) throw new Error(EXPIRED)
           const failed = error.response || {}
           if (!failed.status) throw error
           const body =
@@ -546,11 +561,18 @@ export default ({ app, store }, inject) => {
         checkDocument(response.data, uuid)
         return response.data
       }
-      const response = await window.fetch(url, {
-        credentials: token ? 'omit' : 'include',
-        headers,
-      })
+      let response
+      try {
+        response = await window.fetch(url, {
+          credentials: token ? 'omit' : 'include',
+          headers,
+        })
+      } catch (error) {
+        if (renew) throw new Error(EXPIRED)
+        throw error
+      }
       if (!response.ok) {
+        if (renew) throw new Error(EXPIRED)
         throw failure(
           url,
           response.status,
