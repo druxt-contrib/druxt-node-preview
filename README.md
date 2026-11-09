@@ -26,6 +26,7 @@ show it, paragraphs included.
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
 - [Options](#options)
+- [For editors](#for-editors)
 - [Troubleshooting](#troubleshooting)
 - [More documentation](#more-documentation)
 
@@ -37,6 +38,7 @@ show it, paragraphs included.
 - Wraps the preview in a component of your own, for a title or a container.
 - Reads the preview with a Simple OAuth token on a frontend on another domain.
 - Can add its own preview target to Drupal each time Nuxt starts up.
+- Keeps the preview page out of shared caches and search engines.
 
 ## How it works
 
@@ -56,7 +58,8 @@ show it, paragraphs included.
 
 - Nuxt 2, with Druxt 0.25 and Druxt Entity 0.29 or later, through `druxt-site`
   0.15.
-- Node 16 for the build. Druxt's schema build fails on newer Node.
+- Node 16.20.1 or a later Node 16 for the build. Druxt's schema build fails on
+  newer Node.
 - Drupal 10.3 or 11, with Consumer Node Preview and JSON:API Node Preview. See
   [Consumer Node Preview's requirements](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#requirements)
   for the JSON:API Node Preview fixes it needs.
@@ -93,6 +96,10 @@ On Drupal:
    drush en consumer_node_preview
    ```
 
+   An editor who can edit a node can preview it, as with Drupal's own
+   Preview button. Their role also needs **View published content**, because
+   JSON:API checks it before it shows a node.
+
 2. Go to **Administration > Configuration > Web services > Consumers**, and
    add or edit the frontend's consumer. Under **Preview targets**, add a label
    and this URL, with your frontend's host:
@@ -109,9 +116,10 @@ On Drupal:
    `services.yml`. [Consumer Node Preview's
    configuration](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#configuration)
    has the YAML.
-4. Let Drupal show the preview page in a frame. On the preview page's route
-   only, remove any `X-Frame-Options` header, and add Drupal's origin to its
-   `frame-ancestors` rule. Keep the frontend's other pages as they are.
+4. Let Drupal show the preview page in a frame. Nuxt doesn't send frame
+   headers by default. If your host or a module adds `X-Frame-Options` or a
+   `Content-Security-Policy`, exempt the preview path, and add Drupal's origin
+   to `frame-ancestors`.
 
 To check it, edit a node, change something and press Preview. The Frontend
 tab shows the change.
@@ -138,36 +146,45 @@ include: { 'node--page': ['field_content.field_media'] }
 ```
 
 **origins.** Any link can put an address in the page's URL. So the page only
-fetches from this site, from `druxt.baseUrl`, and from `origins`. A request to
-an origin in `origins` goes without the Druxt client, whose headers and auth
-are for `druxt.baseUrl`, unless that origin is the frontend's own or
-`druxt.baseUrl`'s. An origin whose host has characters other than
-letters, digits, dots, hyphens and `_` is ignored, unless it is an IPv6 address
-in brackets, such as `http://[::1]:3000`.
+fetches from its own origin, `druxt.baseUrl`, a register `backend`, and
+`origins`. List each as a full URL, such as `https://cms.example.com`. [The
+preview request](docs/preview-request.md) says which of them the Druxt client
+fetches from.
 
 A value the module cannot use shows a warning in the build output, and the
 module ignores it.
 
+## For editors
+
+Edit a node, change something and press **Preview**. Drupal opens its preview
+screen. The Frontend tab shows the node as the live site will, with your
+changes. The preview screen can also offer a view mode, a layout and a device
+width.
+
+- **The tab stays on "Loading preview...".** Clear the browser's cache for
+  the frontend, then press Preview again.
+- **The tab shows "Preview unavailable".** Send the message under it to your
+  site builder.
+- **"The preview token has expired. Press Preview in Drupal again."** The
+  preview was open too long. Press Preview again.
+
 ## Troubleshooting
 
-The page shows "Preview unavailable" and a message.
+These are the commonest problems. [Troubleshooting](docs/troubleshooting.md)
+lists every message the module shows.
 
-- **HTTP 404.** Drupal has no preview of this node for the editor. Check that
-  the editor pressed Preview, and that the frontend and Drupal share a parent
-  domain. On your own computer, use one host name for both: `localhost` and
-  `127.0.0.1` count as different. Then check the CORS settings.
-- **"The preview endpoint is not on this site or its Drupal site".** Add the
-  preview's origin to the `origins` option.
-- **"The URL fragment has no preview endpoint".** Make the target URL end in
-  `#[jsonapi_node_preview_path]` or `#[jsonapi_node_preview]`.
-- **HTTP 400.** An `include` path that the previewed type does not have. Key
-  that path by type.
-
-If the Frontend tab stays blank, check the frame headers from step 4 of the
-[Quick start](#quick-start), because the frontend refused the frame.
-
-For automatic registration and schema errors, see
-[Troubleshooting](docs/troubleshooting.md).
+- **The Frontend tab stays blank.** The frontend refused the frame. Step 4 of
+  the [Quick start](#quick-start) has the fix.
+- **"Preview request failed with HTTP 404 for ...".** Drupal has no preview of
+  this node for the editor. Check that the editor pressed Preview, and that
+  the frontend and Drupal share a parent domain. On your own computer, use one
+  host name for both: `localhost` and `127.0.0.1` count as different. Then
+  check the CORS settings.
+- **"The preview endpoint is not on this site or its Drupal site: ...".** Add
+  the preview's origin to the `origins` option.
+- **"The URL fragment has no preview endpoint."** Put
+  `[jsonapi_node_preview_path]` or `[jsonapi_node_preview]` after the `#` in
+  the target URL.
 
 ## More documentation
 

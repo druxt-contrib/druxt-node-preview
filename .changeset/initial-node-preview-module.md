@@ -9,5 +9,5 @@ Add the DruxtNodePreview module. It shows an unsaved Drupal node in a Druxt site
 - Lets the editor pick a Nuxt layout, such as a bare one for embedded content.
 - Wraps the preview in a component of your own, for a title or a container.
 - Reads the preview with a Simple OAuth token on a frontend on another domain.
-- Can add its own preview target to Drupal each time Nuxt starts.
+- Can add its own preview target to Drupal each time Nuxt starts up.
 - Keeps the preview page out of shared caches and search engines.
