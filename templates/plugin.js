@@ -16,6 +16,11 @@ export default ({ app, store }, inject) => {
   const layouts = JSON.parse('<%= JSON.stringify(options.layouts) %>')
   // Origins the preview may come from, besides this site's own.
   const origins = JSON.parse('<%= JSON.stringify(options.origins) %>')
+  // Register backends, which the page fetches from without the Druxt client.
+  const backends = JSON.parse('<%= JSON.stringify(options.backends) %>')
+
+  // Separates the endpoint from a token in the URL fragment.
+  const TOKEN_MARK = ';token='
 
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
@@ -255,16 +260,32 @@ export default ({ app, store }, inject) => {
       if (!hash) return null
       // vue-router normalises the URL, which collapses the double slash after
       // the scheme inside the fragment. Repair it.
-      return decodeURIComponent(hash).replace(/^(https?):\/(?!\/)/, '$1://')
+      return decodeURIComponent(hash)
+        .split(TOKEN_MARK)[0]
+        .replace(/^(https?):\/(?!\/)/, '$1://')
     },
 
     /**
-     * Fetches the preview document with the editor's session.
+     * Returns the token from the URL fragment, for a frontend on another site.
+     *
+     * @returns {string|null} The token, or null when the preview reads with
+     *   the editor's session.
+     */
+    token: () =>
+      decodeURIComponent((window.location.hash || '').slice(1)).split(
+        TOKEN_MARK
+      )[1] || null,
+
+    /**
+     * Fetches the preview document with the editor's session, or with the
+     * fragment's token where the session can't reach this frontend. A token
+     * goes without credentials, so CORS on Drupal stays as it is.
      *
      * The request goes through the Druxt client, with credentials. The site's
      * request interceptors apply, and the editor's session cookie goes with
      * it. A path stays a path. The client resolves it against its own base
-     * URL, and interceptors that decide by path still see it.
+     * URL, and interceptors that decide by path still see it. A register
+     * backend is the exception: it gets a plain request without the client.
      *
      * @param {string} endpoint - The JSON:API Node Preview endpoint.
      *
@@ -273,12 +294,22 @@ export default ({ app, store }, inject) => {
     fetch: async (endpoint) => {
       const uuid = checkEndpoint(endpoint)
       const url = withInclude(endpoint)
-      const headers = { Accept: 'application/vnd.api+json' }
-      const client = (app.$druxt || {}).axios
+      const token = plugin.token()
+      const headers = {
+        Accept: 'application/vnd.api+json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      }
+      // The Druxt client's defaults, such as its auth, are for druxt.baseUrl.
+      // A backend gets a plain request instead.
+      const { origin } = new URL(url, window.location.origin)
+      const client = backends.includes(origin) ? null : (app.$druxt || {}).axios
       if (client) {
         let response
         try {
-          response = await client.get(url, { headers, withCredentials: true })
+          response = await client.get(url, {
+            headers,
+            withCredentials: !token,
+          })
         } catch (error) {
           const failed = error.response || {}
           if (!failed.status) throw error
@@ -293,7 +324,7 @@ export default ({ app, store }, inject) => {
         return response.data
       }
       const response = await window.fetch(url, {
-        credentials: 'include',
+        credentials: token ? 'omit' : 'include',
         headers,
       })
       if (!response.ok) {

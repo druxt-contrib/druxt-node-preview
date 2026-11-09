@@ -1,6 +1,7 @@
 /**
  * @jest-environment node
  */
+import axios from 'axios'
 import http from 'http'
 import { registerTarget } from '../src/register.js'
 
@@ -9,14 +10,19 @@ import { registerTarget } from '../src/register.js'
 const serve = (handler) =>
   new Promise((resolve) => {
     const seen = []
+    const requests = []
     const server = http.createServer((req, res) => {
       seen.push(req.url)
+      let body = ''
+      req.on('data', (chunk) => (body += chunk))
+      req.on('end', () => requests.push({ headers: req.headers, body }))
       handler(req, res)
     })
     server.listen(0, '127.0.0.1', () => {
       resolve({
         server,
         seen,
+        requests,
         base: `http://127.0.0.1:${server.address().port}`,
       })
     })
@@ -80,4 +86,56 @@ test('a request that Drupal does not answer stops at the timeout', async () => {
   } finally {
     await close(drupal.server)
   }
+})
+
+test('a backend gets nothing from the global axios defaults', async () => {
+  const backend = await serve((req, res) => {
+    res.setHeader('Content-Type', 'application/json')
+    res.end(
+      req.url === '/oauth/token'
+        ? '{"access_token":"the-access-token-value"}'
+        : '{"targets":[],"layouts":[]}'
+    )
+  })
+  const global = axios.defaults
+  const before = {
+    common: { ...global.headers.common },
+    transformRequest: global.transformRequest,
+  }
+  global.headers.common['X-Api-Key'] = ['site-key']
+  global.headers.common.Authorization = 'Basic c2l0ZQ=='
+  global.transformRequest = [
+    (data, headers) => {
+      headers['X-Leak'] = 'site'
+      return data
+    },
+    ...before.transformRequest,
+  ]
+  try {
+    await expect(
+      registerTarget(
+        settings('https://cms.example.com', {
+          backend: backend.base,
+          token: true,
+        })
+      )
+    ).resolves.toBe('registered')
+  } finally {
+    global.headers.common = before.common
+    global.transformRequest = before.transformRequest
+    await close(backend.server)
+  }
+  expect(backend.seen).toEqual([
+    '/oauth/token',
+    '/api/consumer-node-preview/targets',
+  ])
+  for (const { headers } of backend.requests) {
+    expect(headers['x-api-key']).toBeUndefined()
+    expect(headers['x-leak']).toBeUndefined()
+  }
+  const [tokenRequest, patch] = backend.requests
+  expect(tokenRequest.headers.authorization).toBeUndefined()
+  expect(tokenRequest.body).toContain('grant_type=client_credentials')
+  expect(patch.headers.authorization).toBe('Bearer the-access-token-value')
+  expect(JSON.parse(patch.body).target.label).toBe('www.example.com')
 })

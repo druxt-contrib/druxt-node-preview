@@ -182,12 +182,15 @@ export default {
 DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' npm run start
 ```
 
-| Option     | Environment variable               | Default                                      | Description                                                                                                                               |
-| ---------- | ---------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `url`      | `DRUXT_NODE_PREVIEW_URL`           | None                                         | The frontend's public URL, such as `https://www.example.com`. Nuxt cannot know it from a build. Add the router base, if the site has one. |
-| `consumer` | `DRUXT_NODE_PREVIEW_CLIENT_ID`     | None                                         | The client ID of the consumer to register on. See [The consumer](#the-consumer).                                                          |
-| None       | `DRUXT_NODE_PREVIEW_CLIENT_SECRET` | None                                         | The consumer's secret. The module reads it only from the environment.                                                                     |
-| `label`    | None                               | The host of `url`, such as `www.example.com` | The target's name in Drupal's Frontend picker.                                                                                            |
+| Option     | Environment variable                  | Default                                      | Description                                                                                                                               |
+| ---------- | ------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`      | `DRUXT_NODE_PREVIEW_URL`              | None                                         | The frontend's public URL, such as `https://www.example.com`. Nuxt cannot know it from a build. Add the router base, if the site has one. |
+| `consumer` | `DRUXT_NODE_PREVIEW_CLIENT_ID`        | None                                         | The client ID of the consumer to register on. See [The consumer](#the-consumer).                                                          |
+| None       | `DRUXT_NODE_PREVIEW_CLIENT_SECRET`    | None                                         | The consumer's secret. The module reads it only from the environment.                                                                     |
+| `label`    | None                                  | The host of `url`, such as `www.example.com` | The target's name in Drupal's Frontend picker.                                                                                            |
+| `token`    | `DRUXT_NODE_PREVIEW_REGISTER_TOKEN`   | `true` with `backend`, otherwise `false`     | Registers a target that reads the preview with a token. See [Previews with a token](#previews-with-a-token).                              |
+| `backend`  | `DRUXT_NODE_PREVIEW_REGISTER_BACKEND` | None                                         | A Drupal site other than `druxt.baseUrl` to register on. See [Registering on another Drupal site](#registering-on-another-drupal-site).   |
+| None       | `DRUXT_NODE_PREVIEW_REGISTER_SECRET`  | None                                         | The consumer's secret on the `backend` site.                                                                                              |
 
 An environment variable wins over the option in `nuxt.config.js`. So one
 config serves local, staging and production, and each host sets its own
@@ -224,7 +227,10 @@ the `path` option, then
 `?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]`. Without the
 `layouts` option, the URL has no `&layout=[layout]`. The path token works
 because the target is on the Drupal site at `druxt.baseUrl`, the site the
-Druxt client fetches from.
+Druxt client fetches from. With the `token` option, the URL ends in
+`#[jsonapi_node_preview_path];token=[preview_token]` instead. With a `backend`,
+the URL holds the full endpoint, `#[jsonapi_node_preview];token=[preview_token]`,
+because a path would name `druxt.baseUrl`.
 
 If the `layouts` option is set, the PATCH also sets the consumer's Preview
 layouts. If not, Drupal keeps the consumer's layouts.
@@ -251,8 +257,10 @@ each keep their own target on one consumer. Frontends that share a label
 replace each other's target.
 
 The module sends each request with a `DruxtClient` from Druxt, so the site's
-`druxt.axios` options, such as its headers, apply. It never follows a
-redirect, so the secret goes only to `druxt.baseUrl`.
+`druxt.axios` options, such as its headers, apply. A `backend` gets only the
+`timeout` and `proxy` from `druxt.axios`, and nothing from the global axios
+defaults, because they are for `druxt.baseUrl`. It never follows a redirect,
+so the secret goes only to the site it names.
 
 To read the targets back, send the consumer's client ID in the
 `X-Consumer-ID` header, or put `?consumerId=<client id>` or
@@ -268,6 +276,26 @@ The requests go from Nuxt's server, not from a browser, so they don't need
 CORS settings. They don't send a session cookie, so Drupal does not ask for a
 CSRF token. Use `https` for `druxt.baseUrl`, because the token request sends
 the secret.
+
+### Registering on another Drupal site
+
+A frontend can register on a Drupal site other than the one it reads from,
+such as a branch build that previews content from production. Set `backend`
+to that site's URL, and `DRUXT_NODE_PREVIEW_REGISTER_SECRET` to the
+consumer's secret there:
+
+```sh
+DRUXT_NODE_PREVIEW_REGISTER_BACKEND='https://cms.example.com' \
+DRUXT_NODE_PREVIEW_REGISTER_SECRET='<the consumer secret>' npm run start
+```
+
+The module never sends `DRUXT_NODE_PREVIEW_CLIENT_SECRET` to the `backend`
+site, so a frontend can't hand its own site's secret to another one by
+mistake. The target reads with a token, because a path would name the wrong
+site. The module also accepts previews from the `backend` origin, and fetches
+them without the Druxt client, whose options are for `druxt.baseUrl`. Nuxt writes
+the backend into the page when it builds, so set it for the build as well as
+for `nuxt start`. Only registration needs the secret.
 
 ### Targets in settings.php
 
@@ -453,6 +481,36 @@ is not enough on its own.
 Without a proxy, the request goes to Drupal's origin. Drupal then needs the
 CORS settings from [Drupal setup](#drupal-setup). The session cookie is
 `SameSite=Lax`, so the frontend and Drupal need one parent domain.
+
+### Previews with a token
+
+The editor's session only reaches a frontend on the same parent domain as
+Drupal. A frontend on another domain, or on a tunnel, can read the preview
+with a token instead. Use Consumer Node Preview's `[preview_token]` token in
+the target URL:
+
+```text
+https://preview.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path];token=[preview_token]
+```
+
+With automatic registration, set `token: true`, or
+`DRUXT_NODE_PREVIEW_REGISTER_TOKEN=true`, and the module registers that URL.
+The path goes through the Druxt client, so on a site with `druxt.proxy.api`
+the preview request goes through the site's own proxy.
+
+The page splits the token off the fragment and sends it as a bearer token,
+with no cookie. Drupal then needs:
+
+- Simple OAuth, with Consumer Node Preview 1.0.0-beta1 or later.
+- The Authorization Code grant on the target's consumer, with a scope that
+  gives the editor's role access to the preview. The token has the scopes
+  the editor would get by signing in to that consumer.
+- CORS that allows the frontend's origin and the `Authorization` header,
+  unless the request goes through `druxt.proxy.api`. The request has no
+  credentials, so CORS can allow any origin.
+
+Without Simple OAuth, the token is empty, and the page reads with the
+editor's session.
 
 The page only fetches a node preview, from an address that ends in
 `/{uuid}/preview`. The response must be `application/vnd.api+json`, and each

@@ -10,8 +10,10 @@ import { DruxtClient } from 'druxt'
  * sends the PATCH again on a timer, so a running frontend's target stays active.
  *
  * Every request goes through a DruxtClient, so the site's `druxt.axios` options
- * apply. No request follows a redirect, so the secret never goes to another
- * host. A failure never stops Nuxt, and no message holds the secret or the token.
+ * apply, but a backend gets only their timeout and proxy, and nothing from the
+ * global axios defaults. No request follows a redirect, so the secret never
+ * goes to another host. A failure never stops Nuxt, and no message holds the
+ * secret or the token.
  */
 
 const PREFIX = '[druxt-node-preview] '
@@ -53,15 +55,45 @@ const toBaseUrl = (value) => {
 }
 
 /**
+ * Returns the backend that the register option names, or null.
+ *
+ * It needs no secret. The build makes the preview page, and the page must
+ * accept previews from the backend even when only `nuxt start` has the secret.
+ *
+ * @param {*} value - The `register` option.
+ * @param {object} env - The environment, such as process.env.
+ *
+ * @returns {string|null} The backend's base URL.
+ */
+export const resolveBackend = (value, env) => {
+  if (value !== true && (typeof value !== 'object' || !value)) return null
+  if (Array.isArray(value)) return null
+  const options = value === true ? {} : value
+  const raw =
+    fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_BACKEND') || options.backend
+  return raw ? toBaseUrl(raw) : null
+}
+
+/**
  * Returns the registration settings, or null when registration is off.
  *
  * The environment wins over the options, so one nuxt.config.js serves each
  * environment. The secret comes only from the environment.
  *
+ * DRUXT_NODE_PREVIEW_REGISTER_BACKEND, or `backend`, is a Drupal site other
+ * than druxt.baseUrl to register on. Its secret is the separate
+ * DRUXT_NODE_PREVIEW_REGISTER_SECRET, so a frontend never sends its own
+ * backend's secret to another site.
+ *
+ * DRUXT_NODE_PREVIEW_REGISTER_TOKEN, or `token`, says whether the target
+ * reads the preview with a token instead of the editor's session. It is on
+ * with a backend, and off otherwise.
+ *
  * @param {*} value - The `register` option.
  * @param {object} env - The environment, such as process.env.
  *
- * @returns {object|null} The url, label, consumer and secret.
+ * @returns {object|null} The url, label, consumer, secret and token, and
+ *   the backend when there is one.
  */
 export const resolveRegister = (value, env) => {
   if (value === undefined || value === null || value === false) return null
@@ -81,15 +113,38 @@ export const resolveRegister = (value, env) => {
   const url = toBaseUrl(fromEnv(env, 'DRUXT_NODE_PREVIEW_URL') || options.url)
   const consumer =
     fromEnv(env, 'DRUXT_NODE_PREVIEW_CLIENT_ID') || options.consumer
-  const secret = fromEnv(env, 'DRUXT_NODE_PREVIEW_CLIENT_SECRET')
+  const rawBackend =
+    fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_BACKEND') || options.backend
+  const backend = rawBackend ? toBaseUrl(rawBackend) : null
+  const secretName = rawBackend
+    ? 'DRUXT_NODE_PREVIEW_REGISTER_SECRET'
+    : 'DRUXT_NODE_PREVIEW_CLIENT_SECRET'
+  const secret = fromEnv(env, secretName)
+
+  const envToken = fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_TOKEN')
+  const rawToken = envToken !== undefined ? envToken : options.token
+  const token =
+    rawToken === undefined
+      ? Boolean(backend)
+      : new Map([
+          ['true', true],
+          ['1', true],
+          ['false', false],
+          ['0', false],
+        ]).get(String(rawToken))
 
   const problems = [
     !url &&
       "DRUXT_NODE_PREVIEW_URL or register.url must be the frontend's full http(s) URL, with no query or fragment.",
     (typeof consumer !== 'string' || !/^[\x21-\x7e]+$/.test(consumer)) &&
       "DRUXT_NODE_PREVIEW_CLIENT_ID or register.consumer must be the consumer's client ID.",
+    rawBackend &&
+      !backend &&
+      "DRUXT_NODE_PREVIEW_REGISTER_BACKEND or register.backend must be the Drupal site's full http(s) URL.",
+    token === undefined &&
+      'DRUXT_NODE_PREVIEW_REGISTER_TOKEN or register.token must be true or false.',
     !secret &&
-      "DRUXT_NODE_PREVIEW_CLIENT_SECRET must be the consumer's secret, in the environment that runs Nuxt.",
+      `${secretName} must be the consumer's secret, in the environment that runs Nuxt.`,
   ].filter(Boolean)
   if (problems.length) {
     warn(`Ignored the register option. ${problems.join(' ')}`)
@@ -102,7 +157,14 @@ export const resolveRegister = (value, env) => {
     (typeof options.label === 'string' && options.label.trim()) ||
     new URL(url).host
 
-  return { url, label, consumer, secret }
+  return {
+    url,
+    label,
+    consumer,
+    secret,
+    token,
+    ...(backend ? { backend } : {}),
+  }
 }
 
 /**
@@ -116,15 +178,22 @@ export const resolveRegister = (value, env) => {
  * @param {string} url - The frontend's base URL.
  * @param {string} path - The preview page's path.
  * @param {string[]} layouts - The layouts option.
+ * @param {boolean} [token] - Whether the preview reads with a token, for an
+ *   editor whose session doesn't reach this frontend. The fragment then holds
+ *   the token after the endpoint.
+ * @param {boolean} [backend] - Whether the target is on a Drupal site other
+ *   than druxt.baseUrl. A path would name the wrong site, so the fragment
+ *   holds the endpoint's full URL instead.
  *
  * @returns {string} The URL template.
  */
-export const targetUrl = (url, path, layouts) =>
+export const targetUrl = (url, path, layouts, token = false, backend = false) =>
   url +
   path +
   '?vm=[view_mode]' +
   (layouts.length ? '&layout=[layout]' : '') +
-  '#[jsonapi_node_preview_path]'
+  (backend ? '#[jsonapi_node_preview]' : '#[jsonapi_node_preview_path]') +
+  (token ? ';token=[preview_token]' : '')
 
 const CREDENTIALS =
   'Check the secret, and that the consumer is confidential, allows the Client credentials grant, and has a Client credentials user.'
@@ -155,6 +224,47 @@ const reason = (data) => {
     (value) => typeof value === 'string' && value.trim()
   )
   return text ? `: ${text.trim().slice(0, 300)}` : ''
+}
+
+/**
+ * Replaces an axios instance's defaults with ones made here.
+ *
+ * A new axios instance starts with a copy of the global axios defaults, and
+ * axios falls back to the global adapter. Their headers, auth, params and
+ * transforms can all add a credential for druxt.baseUrl. So a register backend
+ * gets none of them: only an http adapter, JSON in and out, and the timeout
+ * and proxy. Each request sets the headers it needs.
+ *
+ * @param {object} defaults - The axios instance's defaults.
+ * @param {object} options - The timeout, and the proxy if there is one.
+ */
+const forBackend = (defaults, options) => {
+  // axios 0.x gives each instance its http adapter as a function, and has no
+  // adapter names. axios 1.x gives a list of names, so the backend asks for
+  // its http adapter by name.
+  const adapter =
+    typeof defaults.adapter === 'function' ? defaults.adapter : 'http'
+  for (const name of Object.keys(defaults)) delete defaults[name]
+  Object.assign(defaults, {
+    ...options,
+    adapter,
+    headers: {},
+    transformRequest: [
+      (data) =>
+        data === undefined || typeof data === 'string'
+          ? data
+          : JSON.stringify(data),
+    ],
+    transformResponse: [
+      (data) => {
+        try {
+          return JSON.parse(data)
+        } catch {
+          return data
+        }
+      },
+    ],
+  })
 }
 
 /**
@@ -190,12 +300,15 @@ const send = async (client, config, hints) => {
  * It never throws. A failure prints a warning.
  *
  * @param {object} settings - The settings from resolveRegister(), with the
- *   baseUrl and druxt options, and the path and layouts options.
+ *   baseUrl and druxt options, and the path and layouts options. A backend
+ *   wins over baseUrl.
  *
  * @returns {Promise<string>} "registered" or "failed".
  */
 export const registerTarget = async ({
   baseUrl,
+  backend,
+  token: useToken,
   druxt = {},
   url,
   label,
@@ -206,21 +319,31 @@ export const registerTarget = async ({
 }) => {
   let token
   try {
-    if (!baseUrl) throw new Error('druxt.baseUrl is not set.')
-    const base = baseUrl.replace(/\/+$/, '')
+    if (!backend && !baseUrl) throw new Error('druxt.baseUrl is not set.')
+    const base = (backend || baseUrl).replace(/\/+$/, '')
     const { protocol, hostname } = new URL(base)
     if (
       protocol === 'http:' &&
       !/^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$|\.localhost$/.test(hostname)
     ) {
       warn(
-        'druxt.baseUrl uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.'
+        `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
       )
     }
+    // The site's axios options are for druxt.baseUrl, so a backend gets only
+    // the timeout and proxy. Its client starts from axios's own defaults, so
+    // its adapter is the one axios chose.
+    const { timeout = TIMEOUT, proxy } = druxt.axios || {}
     const client = new DruxtClient(base, {
       ...druxt,
-      axios: { timeout: TIMEOUT, ...druxt.axios },
+      axios: backend ? { timeout } : { timeout: TIMEOUT, ...druxt.axios },
     })
+    if (backend) {
+      forBackend(client.axios.defaults, {
+        timeout,
+        ...(proxy === undefined ? {} : { proxy }),
+      })
+    }
 
     const answer = await send(
       client,
@@ -255,7 +378,16 @@ export const registerTarget = async ({
         },
         // Without layouts, Drupal keeps the consumer's own.
         data: {
-          target: { label, url: targetUrl(url, path, layouts) },
+          target: {
+            label,
+            url: targetUrl(
+              url,
+              path,
+              layouts,
+              Boolean(useToken),
+              Boolean(backend)
+            ),
+          },
           ...(layouts.length ? { layouts: [...new Set(layouts)] } : {}),
         },
       },

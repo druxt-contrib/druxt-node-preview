@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { DruxtClient } from 'druxt'
 import {
   HEARTBEAT,
@@ -84,6 +85,7 @@ describe('resolveRegister', () => {
       label: 'env.example.com',
       consumer: 'from-env',
       secret: SECRET,
+      token: false,
     })
   })
 
@@ -107,6 +109,7 @@ describe('resolveRegister', () => {
       label: 'Production',
       consumer: 'frontend',
       secret: SECRET,
+      token: false,
     })
   })
 
@@ -198,6 +201,28 @@ describe('registerTarget', () => {
     })
   })
 
+  test('registers the token form, on another site or when asked', async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    await registerTarget(
+      settings({ baseUrl: undefined, backend: 'https://cms.test', token: true })
+    )
+    await registerTarget(settings({ token: true }))
+
+    expect(request.mock.calls[0][1]).toBe('https://cms.test/oauth/token')
+    expect(request.mock.calls[1][1]).toBe(
+      'https://cms.test/api/consumer-node-preview/targets'
+    )
+    const sent = (call) => JSON.parse(request.mock.calls[call][2].body)
+    // A path would name druxt.baseUrl, not the backend.
+    expect(sent(1).target.url).toBe(
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview];token=[preview_token]'
+    )
+    // On druxt.baseUrl, the path goes through the site's API proxy, if any.
+    expect(sent(3).target.url).toBe(
+      'https://www.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path];token=[preview_token]'
+    )
+  })
+
   test('sends the layouts once each, when the site lists them', async () => {
     answer(tokenOk(), saved())
     await registerTarget(settings({ layouts: ['a', 'b', 'a'] }))
@@ -216,6 +241,107 @@ describe('registerTarget', () => {
 
     await registerTarget(settings({ druxt: { axios: { timeout: 60000 } } }))
     expect(clients[1].axios.defaults.timeout).toBe(60000)
+  })
+
+  test('sends no site credentials to a backend', async () => {
+    answer(tokenOk(), saved())
+    const druxt = {
+      baseUrl: BASE,
+      axios: {
+        timeout: 60000,
+        headers: { Authorization: 'Basic c2l0ZQ==' },
+        auth: { username: 'site', password: 'site' },
+        withCredentials: true,
+      },
+    }
+    await registerTarget(
+      settings({ backend: 'https://other.example.com', token: true, druxt })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.headers.Authorization).toBeUndefined()
+    expect(defaults.auth).toBeUndefined()
+    expect(defaults.withCredentials).toBeFalsy()
+  })
+
+  test('a backend gets only the timeout and proxy of the site', async () => {
+    answer(tokenOk(), saved())
+    const proxy = { host: 'proxy.example.com', port: 3128 }
+    const druxt = {
+      baseUrl: BASE,
+      axios: { timeout: 60000, proxy, params: { api_key: 'site' } },
+    }
+    await registerTarget(
+      settings({ backend: 'https://other.example.com', token: true, druxt })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.proxy).toEqual(proxy)
+    expect(defaults.params).toBeUndefined()
+  })
+
+  test('a backend gets no defaults from the global axios', async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    axios.defaults.headers.common.Authorization = 'Basic Z2xvYmFs'
+    axios.defaults.headers.patch.Cookie = 'SESS=site'
+    axios.defaults.headers.common['X-Api-Key'] = 'site'
+    axios.defaults.headers['X-Site'] = 'yes'
+    axios.defaults.params = { api_key: 'site' }
+    try {
+      await registerTarget(
+        settings({ backend: 'https://other.example.com', token: true })
+      )
+      await registerTarget(settings())
+    } finally {
+      delete axios.defaults.headers.common.Authorization
+      delete axios.defaults.headers.patch.Cookie
+      delete axios.defaults.headers.common['X-Api-Key']
+      delete axios.defaults.headers['X-Site']
+      delete axios.defaults.params
+    }
+    const [backend, site] = clients.map(({ axios }) => axios.defaults)
+    // Each request sets its own headers, and the defaults bring none.
+    expect(backend.headers).toEqual({})
+    expect(backend.params).toBeUndefined()
+    expect(backend.adapter).toBe('http')
+    expect(backend.transformRequest).not.toBe(axios.defaults.transformRequest)
+    expect(backend.transformResponse).not.toBe(axios.defaults.transformResponse)
+    // druxt.baseUrl keeps what axios gives it.
+    expect(site.headers.common.Authorization).toBe('Basic Z2xvYmFs')
+  })
+
+  test('a backend keeps an adapter function, as axios 0.x gives', async () => {
+    answer(tokenOk(), saved())
+    const before = axios.defaults.adapter
+    const adapter = jest.fn()
+    axios.defaults.adapter = adapter
+    try {
+      await registerTarget(
+        settings({ backend: 'https://other.example.com', token: true })
+      )
+    } finally {
+      axios.defaults.adapter = before
+    }
+    expect(clients[0].axios.defaults.adapter).toBe(adapter)
+  })
+
+  test("a backend ignores the site's adapter", async () => {
+    answer(tokenOk(), saved())
+    const before = axios.defaults.adapter
+    const adapter = jest.fn()
+    axios.defaults.adapter = adapter
+    try {
+      await registerTarget(
+        settings({
+          backend: 'https://other.example.com',
+          token: true,
+          druxt: { axios: { adapter: '' } },
+        })
+      )
+    } finally {
+      axios.defaults.adapter = before
+    }
+    expect(clients[0].axios.defaults.adapter).toBe(adapter)
   })
 
   test('no request follows a redirect, and every status comes back', async () => {
@@ -361,4 +487,106 @@ describe('registerOnce', () => {
     expect(unref).toHaveBeenCalledTimes(1)
     interval.mockRestore()
   })
+})
+
+describe('registering on another Drupal site', () => {
+  const env = {
+    DRUXT_NODE_PREVIEW_REGISTER_SECRET: 'theirs',
+    DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours',
+  }
+  const options = {
+    url: 'https://branch.example.com',
+    consumer: 'frontend',
+    backend: 'https://cms.example.com/',
+  }
+
+  test('uses the separate secret, not the one for its own backend', () => {
+    const settings = resolveRegister(options, env)
+    expect(settings.backend).toBe('https://cms.example.com')
+    expect(settings.secret).toBe('theirs')
+  })
+
+  test('registers nothing without the separate secret', () => {
+    expect(
+      resolveRegister(options, { DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours' })
+    ).toBe(null)
+  })
+
+  test('the environment names the backend too', () => {
+    const settings = resolveRegister(
+      { url: options.url, consumer: 'frontend' },
+      {
+        ...env,
+        DRUXT_NODE_PREVIEW_REGISTER_BACKEND: 'https://other.example.com',
+      }
+    )
+    expect(settings.backend).toBe('https://other.example.com')
+  })
+
+  test('a backend target holds the full endpoint and a token', () => {
+    expect(targetUrl('https://b.example.com', '/p', ['a'], true, true)).toBe(
+      'https://b.example.com/p?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview];token=[preview_token]'
+    )
+  })
+
+  test('a token target on druxt.baseUrl holds the path and a token', () => {
+    expect(targetUrl('https://b.example.com', '/p', ['a'], true)).toBe(
+      'https://b.example.com/p?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path];token=[preview_token]'
+    )
+    expect(targetUrl('https://b.example.com', '/p', [])).toBe(
+      'https://b.example.com/p?vm=[view_mode]#[jsonapi_node_preview_path]'
+    )
+  })
+})
+
+describe('the token option', () => {
+  const env = { DRUXT_NODE_PREVIEW_CLIENT_SECRET: 'ours' }
+  const options = { url: 'https://www.example.com', consumer: 'frontend' }
+
+  test('is off for druxt.baseUrl, and on for another site', () => {
+    expect(resolveRegister(options, env).token).toBe(false)
+    expect(
+      resolveRegister(
+        { ...options, backend: 'https://cms.example.com' },
+        { DRUXT_NODE_PREVIEW_REGISTER_SECRET: 'theirs' }
+      ).token
+    ).toBe(true)
+  })
+
+  test('takes a boolean option, or true or false from the environment', () => {
+    expect(resolveRegister({ ...options, token: true }, env).token).toBe(true)
+    expect(
+      resolveRegister(
+        { ...options, token: true },
+        { ...env, DRUXT_NODE_PREVIEW_REGISTER_TOKEN: 'false' }
+      ).token
+    ).toBe(false)
+    expect(
+      resolveRegister(options, {
+        ...env,
+        DRUXT_NODE_PREVIEW_REGISTER_TOKEN: '1',
+      }).token
+    ).toBe(true)
+  })
+
+  test('registers nothing for a value that is not true or false', () => {
+    expect(resolveRegister({ ...options, token: 'yes' }, env)).toBe(null)
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('register.token must be true or false')
+    )
+  })
+
+  // An object lookup would find these on Object.prototype.
+  test.each(['toString', 'constructor', '__proto__'])(
+    'registers nothing for %s',
+    (value) => {
+      expect(resolveRegister({ ...options, token: value }, env)).toBe(null)
+      expect(
+        resolveRegister(options, {
+          ...env,
+          DRUXT_NODE_PREVIEW_REGISTER_TOKEN: value,
+        })
+      ).toBe(null)
+    }
+  )
 })
