@@ -46,8 +46,9 @@ const addDirective = (res, name, directive) => {
  * Renders a Drupal node preview.
  *
  * This page only works in the browser. The preview endpoint arrives in the
- * URL fragment, which never reaches the server, and the fetch uses the
- * editor's Drupal session cookie. A server render shows "Loading preview...".
+ * URL fragment, which never reaches the server. The fetch uses the editor's
+ * Drupal session cookie, or a preview token from the fragment. A server
+ * render shows "Loading preview...".
  */
 export default {
   name: 'DruxtNodePreviewPage',
