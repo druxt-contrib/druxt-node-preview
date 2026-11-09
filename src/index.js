@@ -32,6 +32,23 @@ const toOrigin = (url) => {
 }
 
 /**
+ * Returns a URL as a warning may show it, without a user name or password.
+ *
+ * @param {*} url - The URL as set.
+ *
+ * @returns {string} Its scheme and host, or the value without anything before
+ *   an "@" when it isn't a URL.
+ */
+const forLog = (url) => {
+  try {
+    const { protocol, host } = new URL(url)
+    return protocol + '//' + host
+  } catch {
+    return String(url).replace(/^[^/]*@/, '')
+  }
+}
+
+/**
  * Says why a URL can't be an origin.
  *
  * @param {*} url - A URL that toOrigin() refused.
@@ -196,7 +213,7 @@ const NuxtModule = function (moduleOptions = {}) {
   const listed = (Array.isArray(options.origins) ? options.origins : []).filter(
     (url) => {
       if (toOrigin(url)) return true
-      warn(`Ignored the origin "${url}". ${originProblem(url)}`)
+      warn(`Ignored the origin "${forLog(url)}". ${originProblem(url)}`)
       return false
     }
   )
@@ -223,7 +240,7 @@ const NuxtModule = function (moduleOptions = {}) {
     if (baseUrl && !pluginOptions.drupal && reported !== baseUrl) {
       reported = baseUrl
       warn(
-        `Ignored druxt.baseUrl "${baseUrl}" for previews. ${originProblem(baseUrl)}`
+        `Ignored druxt.baseUrl "${forLog(baseUrl)}" for previews. ${originProblem(baseUrl)}`
       )
     }
     pluginOptions.origins = [

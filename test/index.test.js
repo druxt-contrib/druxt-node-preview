@@ -164,6 +164,22 @@ describe('DruxtNodePreview module', () => {
     warn.mockRestore()
   })
 
+  test('a warning never prints the user name or password in a URL', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    const context = buildContext({
+      baseUrl: "https://admin:hunter2@x'+y.example/path",
+      nodePreview: { origins: ["https://bob:password@y'+z.example"] },
+    })
+    NuxtModule.call(context)
+    const logged = warn.mock.calls.map(([message]) => message).join('\n')
+    expect(logged).toContain("x'+y.example")
+    expect(logged).toContain("y'+z.example")
+    for (const secret of ['admin', 'hunter2', 'bob', 'password']) {
+      expect(logged).not.toContain(secret)
+    }
+    warn.mockRestore()
+  })
+
   test('an origin that is not an http(s) URL is reported, not dropped quietly', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     const context = buildContext({

@@ -479,6 +479,27 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = ''
   })
 
+  test('an expired token in the address is not used, and leaves it', () => {
+    const exp = Math.floor(Date.now() / 1000) - 60
+    const expired = [
+      'e30',
+      Buffer.from(JSON.stringify({ exp })).toString('base64url'),
+      's',
+    ].join('.')
+    // The plugin started on another page, and the router opens the preview.
+    window.history.replaceState(null, '', '/')
+    const { injected } = buildPlugin()
+    window.history.replaceState(
+      null,
+      '',
+      `/druxt/node/preview#${ENDPOINT};token=${expired}`
+    )
+    expect(injected.value.token()).toBe(null)
+    expect(window.location.hash).toBe(`#${ENDPOINT}`)
+    expect(window.sessionStorage.getItem('druxtNodePreview.token')).toBe(null)
+    window.location.hash = ''
+  })
+
   test('a kept token that is not two strings is not used', () => {
     for (const planted of ['"x"', '{"endpoint":1,"token":2}', 'null']) {
       window.sessionStorage.setItem('druxtNodePreview.token', planted)

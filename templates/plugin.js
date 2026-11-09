@@ -328,13 +328,19 @@ export default ({ app, store }, inject) => {
         return null
       }
       if (token) {
-        kept = { endpoint, token }
-        // A reload starts a new page from the address without the token. The
-        // tab's session storage keeps it for that, out of any logged address.
-        try {
-          window.sessionStorage.setItem(TOKEN_STORE, JSON.stringify(kept))
-        } catch {
-          // Storage can be off. The page then reads the token only once.
+        // An expired token would fail where the session might not, so the
+        // page leaves it out. It still leaves the address.
+        const live = !expired(token)
+        if (live) {
+          kept = { endpoint, token }
+          // A reload starts a new page from the address without the token.
+          // The tab's session storage keeps it for that, out of any logged
+          // address.
+          try {
+            window.sessionStorage.setItem(TOKEN_STORE, JSON.stringify(kept))
+          } catch {
+            // Storage can be off. The page then reads the token only once.
+          }
         }
         // An error tracker or session recorder on the page can log the
         // address. So the token leaves it, and the page keeps it here.
@@ -348,7 +354,7 @@ export default ({ app, store }, inject) => {
           '',
           window.location.pathname + window.location.search + '#' + address
         )
-        return token
+        return live ? token : null
       }
       if (!kept) {
         try {
