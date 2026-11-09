@@ -49,9 +49,12 @@ const addDirective = (res, name, directive) => {
  * URL fragment, which never reaches the server. The fetch uses the editor's
  * Drupal session cookie, or a preview token from the fragment. A server
  * render shows "Loading preview...".
+ *
+ * Its name is not DruxtNodePreviewPage, which is the wrapper name for a
+ * bundle called page.
  */
 export default {
-  name: 'DruxtNodePreviewPage',
+  name: 'DruxtNodePreviewRoute',
 
   components: { DruxtNodePreview },
 

@@ -30,6 +30,12 @@ describe('DruxtNodePreviewPage', () => {
     jest.restoreAllMocks()
   })
 
+  // DruxtEntity looks for a wrapper called DruxtNodePreviewPage for a bundle
+  // called page, so the route's page must not have that name.
+  test('has a name no preview wrapper uses', () => {
+    expect(Page.name).toBe('DruxtNodePreviewRoute')
+  })
+
   test('the server render tells caches and search engines to keep nothing', () => {
     const res = { headersSent: false, setHeader: jest.fn() }
     Page.middleware({ res })
