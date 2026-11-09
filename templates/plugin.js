@@ -68,9 +68,14 @@ export default ({ app, store }, inject) => {
 
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
-  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-  const PREVIEW_PATH =
-    /\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/preview$/
+  const UUID_PATTERN =
+    '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+  const UUID = new RegExp('^' + UUID_PATTERN + '$')
+  const PREVIEW_PATH = new RegExp('/(' + UUID_PATTERN + ')/preview$')
+  // The same, with the entity type and bundle before the UUID.
+  const TYPED_PREVIEW_PATH = new RegExp(
+    '/([^/]+)/([^/]+)/' + UUID_PATTERN + '/preview$'
+  )
 
   /**
    * Returns the node's UUID from a preview endpoint, or throws.
@@ -211,6 +216,25 @@ export default ({ app, store }, inject) => {
   }
 
   /**
+   * Returns the configured include paths for an endpoint.
+   *
+   * The option is a list for every previewed type, or an object of lists
+   * keyed by JSON:API type, such as `node--page`. JSON:API rejects a path
+   * that the type does not have, so a path only some bundles have goes in
+   * the object form.
+   *
+   * @param {string} url - The endpoint, from Consumer Node Preview:
+   *   `.../{entity type}/{bundle}/{uuid}/preview`.
+   *
+   * @returns {string[]} The include paths.
+   */
+  const includeFor = (url) => {
+    if (Array.isArray(include)) return include
+    const match = url.split('?')[0].match(TYPED_PREVIEW_PATH)
+    return (match && include[match[1] + '--' + match[2]]) || []
+  }
+
+  /**
    * Adds the configured includes to the include the URL already has.
    *
    * Consumer Node Preview already includes a node's paragraphs. A site adds
@@ -236,27 +260,6 @@ export default ({ app, store }, inject) => {
       .filter(Boolean)
     const merged = [...new Set([...current, ...configured])]
     return base + '?' + [...params, 'include=' + merged.join(',')].join('&')
-  }
-
-  /**
-   * Returns the configured include paths for an endpoint.
-   *
-   * The option is a list for every previewed type, or an object of lists
-   * keyed by JSON:API type, such as `node--page`. JSON:API rejects a path
-   * that the type does not have, so a path only some bundles have goes in
-   * the object form.
-   *
-   * @param {string} url - The endpoint, from Consumer Node Preview:
-   *   `.../{entity type}/{bundle}/{uuid}/preview`.
-   *
-   * @returns {string[]} The include paths.
-   */
-  function includeFor(url) {
-    if (Array.isArray(include)) return include
-    const match = url
-      .split('?')[0]
-      .match(/\/([^/]+)\/([^/]+)\/[0-9a-f-]{36}\/preview$/)
-    return (match && include[match[1] + '--' + match[2]]) || []
   }
 
   /**
