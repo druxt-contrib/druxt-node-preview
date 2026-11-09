@@ -84,9 +84,9 @@ describe('$druxtNodePreview plugin', () => {
     expect(injected.value.endpoint()).toBe(
       'https://example.com/jsonapi/node/article/abc/preview'
     )
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     window.location.hash = '#/jsonapi/node/article/abc/preview'
-    expect(injected.value.token()).toBe(null)
+    expect(injected.value.takeToken()).toBe(null)
     window.location.hash = ''
   })
 
@@ -295,17 +295,17 @@ describe('$druxtNodePreview plugin', () => {
       '',
       `/druxt/node/preview?vm=full#${ENDPOINT};token=cnpt.a.b`
     )
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     expect(window.location.hash).toBe(`#${ENDPOINT}`)
     expect(window.location.search).toBe('?vm=full')
     expect(window.history.state).toEqual({ key: 'kept' })
     // The page reads it again when it comes back, such as after keep-alive.
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     expect(injected.value.endpoint()).toBe(ENDPOINT)
 
     // A new preview address brings its own token, or none.
     window.location.hash = `#/jsonapi/node/article/${UUID}/preview`
-    expect(injected.value.token()).toBe(null)
+    expect(injected.value.takeToken()).toBe(null)
     window.location.hash = ''
   })
 
@@ -314,14 +314,14 @@ describe('$druxtNodePreview plugin', () => {
     const encoded = `${ENDPOINT}?include=a%2526b`
     window.location.hash = `#${encoded};token=cnpt.a.b`
     const before = injected.value.endpoint()
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     expect(window.location.hash).toBe(`#${encoded}`)
     expect(injected.value.endpoint()).toBe(before)
 
     // An encoded token mark leaves an encoded address that reads the same.
     window.location.hash = '#' + encodeURIComponent(`${encoded};token=cnpt.c.d`)
     const encodedBefore = injected.value.endpoint()
-    expect(injected.value.token()).toBe('cnpt.c.d')
+    expect(injected.value.takeToken()).toBe('cnpt.c.d')
     expect(window.location.hash).not.toContain('token')
     expect(injected.value.endpoint()).toBe(encodedBefore)
     window.location.hash = ''
@@ -420,7 +420,7 @@ describe('$druxtNodePreview plugin', () => {
     const { injected } = buildPlugin()
     // Before anything checks or fetches the endpoint.
     expect(window.location.hash).not.toContain('token')
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     window.location.hash = ''
   })
 
@@ -438,7 +438,7 @@ describe('$druxtNodePreview plugin', () => {
     window.history.replaceState(null, '', address)
     ready()
     expect(window.location.hash).toBe(`#${ENDPOINT}`)
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     window.location.hash = ''
   })
 
@@ -456,7 +456,7 @@ describe('$druxtNodePreview plugin', () => {
     window.location.hash = '#section%'
     const { injected } = buildPlugin()
     expect(injected.name).toBe('druxtNodePreview')
-    expect(injected.value.token()).toBe(null)
+    expect(injected.value.takeToken()).toBe(null)
     // The page then says the fragment has no preview endpoint.
     expect(injected.value.endpoint()).toBe(null)
     window.location.hash = ''
@@ -477,7 +477,7 @@ describe('$druxtNodePreview plugin', () => {
       '',
       `/druxt/node/preview#${ENDPOINT};token=${expired}`
     )
-    expect(injected.value.token()).toBe(null)
+    expect(injected.value.takeToken()).toBe(null)
     expect(window.location.hash).toBe(`#${ENDPOINT}`)
     expect(window.sessionStorage.getItem('druxtNodePreview.token')).toBe(null)
     window.location.hash = ''
@@ -487,13 +487,13 @@ describe('$druxtNodePreview plugin', () => {
     for (const planted of ['"x"', '{"endpoint":1,"token":2}', 'null']) {
       window.sessionStorage.setItem('druxtNodePreview.token', planted)
       window.location.hash = `#${ENDPOINT}`
-      expect(buildPlugin().injected.value.token()).toBe(null)
+      expect(buildPlugin().injected.value.takeToken()).toBe(null)
     }
     window.sessionStorage.setItem(
       'druxtNodePreview.token',
       JSON.stringify({ endpoint: ENDPOINT, token: 7 })
     )
-    expect(buildPlugin().injected.value.token()).toBe(null)
+    expect(buildPlugin().injected.value.takeToken()).toBe(null)
     window.location.hash = ''
   })
 
@@ -508,10 +508,10 @@ describe('$druxtNodePreview plugin', () => {
     expect(window.location.hash).toBe(`#${ENDPOINT}`)
     // A reload starts a new page, with the address the token left.
     const { injected } = buildPlugin()
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     // Another preview address gets no token from it.
     window.location.hash = `#/jsonapi/node/article/${UUID}/preview`
-    expect(injected.value.token()).toBe(null)
+    expect(injected.value.takeToken()).toBe(null)
     window.location.hash = ''
     window.sessionStorage.clear()
   })
@@ -532,14 +532,14 @@ describe('$druxtNodePreview plugin', () => {
     buildPlugin()
     // A reload of the page would send the expired token. The session reads it.
     const { injected } = buildPlugin()
-    expect(injected.value.token()).toBe(null)
+    expect(injected.value.takeToken()).toBe(null)
     expect(window.sessionStorage.getItem('druxtNodePreview.token')).toBe(null)
 
     // A token that has not expired, or that has no expiry, is kept.
     const live = jwt(Math.floor(Date.now() / 1000) + 600)
     window.location.hash = `#${ENDPOINT};token=${live}`
     buildPlugin()
-    expect(buildPlugin().injected.value.token()).toBe(live)
+    expect(buildPlugin().injected.value.takeToken()).toBe(live)
     window.location.hash = ''
   })
 
@@ -552,7 +552,7 @@ describe('$druxtNodePreview plugin', () => {
     const { injected } = buildPlugin()
     window.location.hash = '#' + ENDPOINT.replace('https://', 'https:/')
     expect(injected.value.endpoint()).toBe(ENDPOINT)
-    expect(injected.value.token()).toBe('cnpt.a.b')
+    expect(injected.value.takeToken()).toBe('cnpt.a.b')
     window.location.hash = ''
   })
 

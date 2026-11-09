@@ -315,12 +315,17 @@ export default ({ app, store }, inject) => {
     },
 
     /**
-     * Returns the token from the URL fragment, for a frontend on another site.
+     * Takes the token out of the URL fragment, and returns the token to use.
+     *
+     * The token is for a frontend on another site. This takes it out of the
+     * address with replaceState, and keeps it in the tab's session storage
+     * for a reload. Without one in the address, it returns the kept token for
+     * the address's endpoint.
      *
      * @returns {string|null} The token, or null when the preview reads with
      *   the editor's session.
      */
-    token: () => {
+    takeToken: () => {
       const raw = (window.location.hash || '').slice(1)
       let endpoint
       let token
@@ -409,7 +414,7 @@ export default ({ app, store }, inject) => {
     fetch: async (endpoint) => {
       const uuid = checkEndpoint(endpoint)
       const url = withInclude(endpoint)
-      const token = plugin.token()
+      const token = plugin.takeToken()
       const headers = {
         Accept: 'application/vnd.api+json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -497,8 +502,8 @@ export default ({ app, store }, inject) => {
   // this plugin, such as one in the page head or an earlier plugin, can still
   // read the token.
   if (typeof window !== 'undefined') {
-    plugin.token()
-    if (app.router && app.router.onReady) app.router.onReady(plugin.token)
+    plugin.takeToken()
+    if (app.router && app.router.onReady) app.router.onReady(plugin.takeToken)
   }
 
   inject('druxtNodePreview', plugin)
