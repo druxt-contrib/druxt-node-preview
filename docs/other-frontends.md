@@ -2,8 +2,8 @@
 
 [Consumer Node Preview's target
 URLs](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#target-urls)
-show how a frontend reads the preview address from the URL, including the
-`https:/` repair that some routers need. Before it renders anything, a
+show how a frontend reads the preview address from the URL. They include a fix
+for routers that turn `https://` into `https:/`. Before it renders anything, a
 frontend should make the same checks as this module. See [The preview
 request](preview-request.md).
 

@@ -13,9 +13,7 @@ druxt-auth's password or authorization code flow. The client credentials grant
 does not work with a public consumer.
 
 A target that reads with a token also needs the **Authorization Code** grant,
-and a scope of its own, on the same consumer. Steps 1 to 8 set up only the
-registration. Then follow [Previews with a
-token](preview-request.md#previews-with-a-token).
+and a scope of its own, on the same consumer.
 
 ## Steps
 
@@ -65,9 +63,9 @@ token](preview-request.md#previews-with-a-token).
    - In the **Scopes** under **Client Credentials settings**, pick the scope
      from step 5.
 7. Make the user from step 4 the consumer's owner. Consumer Node Preview
-   lets a user change only the targets of a consumer it owns. If the current
-   owner changes the targets through that permission, it can't once the owner
-   changes, so check first how that user will manage them. The consumer form
+   lets a user change only the targets of a consumer it owns. Changing the
+   owner takes target editing away from the old owner. Plan for that first.
+   The consumer form
    has no owner field, so use Drush. Replace `frontend` with the consumer's
    client ID, and `frontend_registrar` with the user name from step 4:
 
@@ -83,6 +81,10 @@ token](preview-request.md#previews-with-a-token).
 8. Set `DRUXT_NODE_PREVIEW_CLIENT_SECRET` to the consumer's secret where Nuxt
    runs. Then start Nuxt. The build output says that it registered the
    target.
+
+Steps 1 to 8 set up only the registration. For a target that reads with a
+token, follow [Previews with a token](preview-request.md#previews-with-a-token)
+as well.
 
 Registration doesn't need CORS settings, but the preview page still needs the
 [Quick start](../README.md#quick-start) steps for CORS and the frame.
