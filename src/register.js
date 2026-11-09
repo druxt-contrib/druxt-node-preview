@@ -129,9 +129,7 @@ export const resolveRegister = (value, env) => {
 
   // Say nothing about the value, so the message cannot give it away.
   if (options.secret !== undefined) {
-    warn(
-      'Ignored druxt.nodePreview.register.secret. Never put the secret in nuxt.config.js.'
-    )
+    warn('Ignored register.secret. Never put the secret in nuxt.config.js.')
   }
 
   const url = toBaseUrl(fromEnv(env, 'DRUXT_NODE_PREVIEW_URL') || options.url)
@@ -227,9 +225,12 @@ const TOKEN_HINTS = {
   401: CREDENTIALS,
   404: 'Install and set up the Simple OAuth module on Drupal.',
 }
+const OWNER =
+  'The consumer\'s Client credentials user must own the consumer, and the token\'s scope must give the "register consumer node preview targets" permission.'
+
 const TARGET_HINTS = {
-  401: 'The consumer\'s Client credentials user must own the consumer, and the token\'s scope must give the "register consumer node preview targets" permission.',
-  403: 'The consumer\'s Client credentials user must own the consumer, and the token\'s scope must give the "register consumer node preview targets" permission.',
+  401: OWNER,
+  403: OWNER,
   404: 'Check that Consumer Node Preview is installed, and that a consumer has this client ID.',
   405: 'Update Consumer Node Preview. This module needs a version with the PATCH method.',
   422: 'Check the register url and the path option.',
@@ -296,10 +297,11 @@ const forBackend = (defaults, options) => {
  * @param {object} client - The DruxtClient.
  * @param {object} config - The axios request.
  * @param {object} hints - What to check, keyed by status.
+ * @param {string} site - What to set to the URL Drupal redirects to.
  *
  * @returns {Promise<*>} The response data.
  */
-const send = async (client, config, hints) => {
+const send = async (client, config, hints, site) => {
   const { status, data, headers } = await client.axios.request({
     ...config,
     maxRedirects: 0,
@@ -309,7 +311,7 @@ const send = async (client, config, hints) => {
   if (status >= 300 && status < 400) {
     const location = headers?.location ? ` to ${headers.location}` : ''
     throw new Error(
-      `Drupal redirected ${config.url}${location} (HTTP ${status}). Set druxt.baseUrl to the URL Drupal redirects to.`
+      `Drupal redirected ${config.url}${location} (HTTP ${status}). Set ${site} to the URL Drupal redirects to.`
     )
   }
   throw new Error(
@@ -344,6 +346,7 @@ export const registerTarget = async ({
   try {
     if (!backend && !baseUrl) throw new Error('druxt.baseUrl is not set.')
     const base = (backend || baseUrl).replace(/\/+$/, '')
+    const redirectTo = backend ? 'the register backend' : 'druxt.baseUrl'
     const { protocol, hostname } = new URL(base)
     if (
       protocol === 'http:' &&
@@ -383,7 +386,8 @@ export const registerTarget = async ({
           client_secret: secret,
         }).toString(),
       },
-      TOKEN_HINTS
+      TOKEN_HINTS,
+      redirectTo
     )
     token = answer?.access_token
     if (!token) throw new Error(`${base}/oauth/token gave no access token.`)
@@ -414,7 +418,8 @@ export const registerTarget = async ({
           ...(layouts.length ? { layouts: [...new Set(layouts)] } : {}),
         },
       },
-      TARGET_HINTS
+      TARGET_HINTS,
+      redirectTo
     )
     info(`Registered the preview target "${label}" on "${consumer}".`)
     return 'registered'

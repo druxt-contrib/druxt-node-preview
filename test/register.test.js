@@ -151,6 +151,8 @@ describe('resolveRegister', () => {
     const output = warn.mock.calls.flat().join(' ')
     expect(output).toContain('Never put the secret in nuxt.config.js')
     expect(output).not.toContain(secret)
+    // The option can come from druxt.nodePreview or the module options.
+    expect(output).toContain('Ignored register.secret.')
   })
 })
 
@@ -403,6 +405,22 @@ describe('registerTarget', () => {
 
     test('a redirect without a location', () =>
       fails('HTTP 301', { status: 301, text: '' }))
+
+    test('a redirect from druxt.baseUrl says to set it', () =>
+      fails('Set druxt.baseUrl to the URL Drupal redirects to.', {
+        status: 301,
+        text: '',
+      }))
+
+    test('a redirect from a backend says to set the backend', async () => {
+      answer({ status: 301, text: '' })
+      await registerTarget(
+        settings({ backend: 'https://other.example.com', token: true })
+      )
+      expect(warn.mock.calls[0][0]).toContain(
+        'Set the register backend to the URL Drupal redirects to.'
+      )
+    })
 
     test.each([
       [404, 'Simple OAuth'],
