@@ -114,11 +114,21 @@ your own code counts as a build too, so set both options for it.
 
 `nuxt.close()` removes the target too. A server of your own that handles
 `SIGINT` or `SIGTERM` and calls `process.exit()` would stop before the DELETE
-ends, so await `nuxt.close()` first:
+ends, so await `nuxt.close()` first. Keep the `nuxt` that `loadNuxt()` gives
+where the handler can reach it. With `cleanup` on, the module sends the signal
+again after the removal, so the handler runs twice: let the second call do
+nothing. A timer stops the server anyway if a close hook hangs:
 
 ```js
 // server/start.js
+let nuxt
+let server
+let stopping = false
+
 const stop = async () => {
+  if (stopping) return
+  stopping = true
+  setTimeout(() => process.exit(0), 10000).unref()
   await nuxt.close()
   server.close(() => process.exit(0))
 }
