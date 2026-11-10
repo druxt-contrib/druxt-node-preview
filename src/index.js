@@ -2,6 +2,8 @@ import { resolve } from 'path'
 import {
   registerOnce,
   registerTarget,
+  removeOnShutdown,
+  removeTarget,
   resolveBackend,
   resolveRegister,
 } from './register.js'
@@ -207,7 +209,12 @@ const NuxtModule = function (moduleOptions = {}) {
     })
   })
 
-  const register = resolveRegister(options.register, process.env)
+  // nuxt dev and nuxt start keep running, and register again on the interval.
+  // A build or generate registers once and exits.
+  const nuxtOptions = this.options || {}
+  const register = resolveRegister(options.register, process.env, {
+    server: Boolean(nuxtOptions.dev || nuxtOptions._start),
+  })
   const backend = resolveBackend(options.register, process.env)
 
   // An origin the site lists must be a full http(s) URL. Say so, rather than
@@ -261,23 +268,22 @@ const NuxtModule = function (moduleOptions = {}) {
   // on Nuxt's ready hook, which comes after every module and its
   // modules:done hook, so druxt.baseUrl is known. Nuxt calls ready in dev,
   // start, build and generate, and waits for it, so a build does not exit
-  // before the request ends. Each request has a short timeout.
+  // before the request ends. Each request has a short timeout. With cleanup,
+  // a clean shutdown removes the target.
   if (register && this.nuxt) {
-    this.nuxt.hook('ready', () =>
-      registerOnce(
-        () =>
-          registerTarget({
-            ...register,
-            druxt: (this.options || {}).druxt || {},
-            // Druxt takes its axios options from here, for @nuxtjs/axios.
-            axios: (this.options || {}).axios,
-            baseUrl: ((this.options || {}).druxt || {}).baseUrl,
-            path: options.path,
-            layouts: pluginOptions.layouts,
-          }),
-        register.interval
-      )
-    )
+    const target = () => ({
+      ...register,
+      druxt: (this.options || {}).druxt || {},
+      // Druxt takes its axios options from here, for @nuxtjs/axios.
+      axios: (this.options || {}).axios,
+      baseUrl: ((this.options || {}).druxt || {}).baseUrl,
+      path: options.path,
+      layouts: pluginOptions.layouts,
+    })
+    this.nuxt.hook('ready', () => {
+      if (register.cleanup) removeOnShutdown(() => removeTarget(target()))
+      return registerOnce(() => registerTarget(target()), register.interval)
+    })
   }
 
   // Add the plugin that fetches and seeds the preview.
