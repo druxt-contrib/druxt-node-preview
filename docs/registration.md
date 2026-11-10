@@ -101,8 +101,10 @@ default:
   **Delete after** limit, and the first cron run after the target expires deletes it.
 - When the server gets `SIGINT` or `SIGTERM`, as from Ctrl+C or a host
   stopping it, the module stops registering and removes the target with a
-  DELETE. It waits a few seconds at most, then the server stops as it would
-  have. A server killed outright can't remove it, so its target goes when it
+  DELETE. It waits a few seconds at most, then sends the signal again, so
+  the server stops as it would have. A `SIGINT` or `SIGTERM` listener of the
+  site's own gets the signal twice, so make it ignore the second one, or set
+  `cleanup` to `false`. A server killed outright can't remove it, so its target goes when it
   expires.
 
 `nuxt build` and `nuxt generate` register once and exit, and a static site's

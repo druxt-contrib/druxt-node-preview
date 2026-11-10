@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { DruxtClient } from 'druxt'
+import signalExit from 'signal-exit'
 import {
   HEARTBEAT,
   registerOnce,
@@ -981,7 +982,6 @@ describe('removeOnShutdown', () => {
       for (const listener of listeners) listener(signal)
     }
     kill.mockImplementation((pid, signal) => deliver(signal))
-    const signalExit = jest.requireActual('signal-exit')
     const removeExitHandler = signalExit(() => {})
     try {
       const remove = jest.fn().mockResolvedValue('removed')
@@ -989,6 +989,8 @@ describe('removeOnShutdown', () => {
       deliver('SIGINT')
       await new Promise((resolve) => setTimeout(resolve, 10))
       expect(remove).toHaveBeenCalledTimes(1)
+      // Once from this module, after the removal, and once from signal-exit.
+      expect(kill).toHaveBeenCalledTimes(2)
       expect(exited).toBe(true)
     } finally {
       removeExitHandler()

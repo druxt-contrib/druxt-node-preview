@@ -723,8 +723,9 @@ export const removeOnShutdown = (remove) => {
     ])
     clearTimeout(timer)
     // The signal goes out again, now that this listener has gone. With no
-    // listener left, Node stops the process. A listener such as signal-exit,
-    // which nuxt dev loads, stops it only once its own are the only ones.
+    // listener left, Node stops the process. signal-exit 3, which nuxt dev
+    // loads, stops it only when its own listeners are the only ones, so it
+    // needs this second signal. A site's own listener gets both.
     process.kill(process.pid, signal)
   }
   process[CLEANUP] = stop

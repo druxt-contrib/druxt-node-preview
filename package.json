@@ -80,6 +80,7 @@
     "lodash": "^4.18.1",
     "markdownlint-cli2": "0.10.0",
     "prettier": "3.3.3",
+    "signal-exit": "^3.0.7",
     "siroc": "0.16.0",
     "vue": "2.7.14",
     "vue-jest": "3.0.7",
