@@ -26,8 +26,8 @@ editor signed in on. Druxt's `proxy: { api: true }` forwards the API but not
 Drupal's sign-in pages, so it is not enough on its own.
 
 Without a proxy, the request goes to Drupal's origin, so Drupal needs CORS that
-allows the frontend's origin with credentials. The session cookie is
-`SameSite=Lax`, so the frontend and Drupal need one parent domain and the same
+allows the frontend's origin with credentials. Drupal's session cookie is
+`SameSite=Lax` by default, so the frontend and Drupal need one parent domain and the same
 scheme, `https` for both.
 
 `[jsonapi_node_preview]`, the full URL, names the Drupal host the editor is
@@ -85,18 +85,20 @@ token the page would send, or `null` when the page reads with the session.
 
 The page sends the token as a bearer token, without credentials, so a request
 to another origin doesn't send a cookie. A path through the site's own proxy
-is a same-origin request, so the browser still sends the frontend's own
-cookies with it. This works once Drupal has Simple OAuth installed. On a site
+is a same-origin request, so the Druxt client still sends the frontend's own
+cookies with it. `window.fetch` sends none. A request interceptor must keep
+an `Authorization` header that is already set, or Drupal gets the wrong
+token. This works once Drupal has Simple OAuth installed. On a site
 with `druxt.proxy.api`, a path goes through the site's own proxy, and Drupal
 doesn't need CORS settings for it.
 
 Otherwise, Drupal's CORS settings must allow the `Authorization` header. The
 [Druxt module](https://www.drupal.org/project/druxt) already does this on a
 site that leaves CORS off: it turns CORS on for any origin and header, without
-credentials. Only a site with CORS settings of its own needs to change them, as
-[Consumer Node Preview's "Previewing on another
-site"](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#previewing-on-another-site)
-shows.
+credentials. A site without the Druxt module, or with CORS settings of its
+own, must allow the frontend's origin and the header itself. See [Consumer
+Node Preview's "Previewing on another
+site"](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/README.md#previewing-on-another-site).
 
 ### The token's scope
 
@@ -126,7 +128,8 @@ and nothing else the editors can do.
 
 Keep the token's lifetime short, on Consumer Node Preview's **Preview** tab.
 It is 15 minutes by default, and anyone who has the token can use it until
-then.
+then. The page still keeps a token 15 minutes at most, so a longer lifetime
+doesn't let a reload of the frame preview for longer.
 
 The **Scopes** under **Client Credentials settings** do not reach the token.
 A token without an Authorization Code scope fails with HTTP 403. See
@@ -153,8 +156,12 @@ On a statically generated site, files have no headers, so the page has a
 `<meta name="robots" content="noindex">` tag instead, beside any robots tag of
 the site's own. Set the headers for the preview path on the static host as
 well, `Cache-Control: no-store` and `X-Robots-Tag: noindex`. A site with
-`ssr: false` needs them most: its HTML file doesn't have the tag, which the
-page adds only once its script runs.
+`ssr: false` needs them most, even when Nuxt serves it. Its middleware runs
+only in the browser, and its HTML doesn't have the tag, which the page adds
+only once its script runs.
+
+A custom server that sends headers before Nuxt renders must set both itself.
+A host's `render:route` hook that sets `Cache-Control` must keep `no-store`.
 
 A cache or browser can still hold an old copy of the page. If the frame stays
 on "Loading preview...", see

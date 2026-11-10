@@ -27,6 +27,9 @@ export default {
 DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' npm run start
 ```
 
+A shell keeps typed commands in its history. On a shared machine, set the
+secret in the host's environment settings or a secrets manager instead.
+
 | Option     | Environment variable                   | Default                                      | Description                                                                                                                               |
 | ---------- | -------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `url`      | `DRUXT_NODE_PREVIEW_URL`               | None                                         | The frontend's public URL, such as `https://www.example.com`. Nuxt cannot know it from a build. Add the router base, if the site has one. |
@@ -72,7 +75,8 @@ consumer's layouts. With the `token` option, the URL ends in
 it holds the full endpoint, `#[jsonapi_node_preview];token=[preview_token]`,
 because a path would name `druxt.baseUrl`. A `backend` turns the token on
 unless `token` is `false`. Then the target holds the full endpoint without a
-token, and reads with the editor's session.
+token, and reads with the editor's session. That needs the session and CORS
+that [Paths and full URLs](preview-request.md#paths-and-full-urls) describes.
 
 The module registers when each Nuxt process starts, then every `interval`
 while it runs, 6 hours by default. Consumer Node Preview moves a target that

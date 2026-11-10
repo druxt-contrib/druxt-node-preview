@@ -33,7 +33,7 @@ show it, paragraphs included.
 ## Features
 
 - Renders the unsaved node with the site's own Druxt components.
-- Includes unsaved paragraphs, and the media they reference.
+- Includes unsaved paragraphs, and with `include`, the media they reference.
 - Lets the editor pick a Nuxt layout, such as a bare one for embedded content.
 - Wraps the preview in a component of your own, for a title or a container.
 - Reads the preview with a Simple OAuth token on a frontend on another domain.
@@ -136,7 +136,8 @@ All options are optional, and go under `druxt.nodePreview`.
 | `layouts`  | `[]`                    | Nuxt layouts the preview may use. See [Layouts and theming](docs/layouts-and-theming.md).                     |
 | `register` | `false`                 | Adds the frontend's preview target to Drupal on start up. See [Automatic registration](docs/registration.md). |
 
-**include.** Consumer Node Preview already includes a node's paragraphs. Add
+**include.** Consumer Node Preview already includes a node's paragraphs, three
+levels deep. Add
 what the paragraphs reference, such as `field_content.field_media`. JSON:API
 refuses a path that the previewed type does not have, so key it by type when
 only some bundles have it:
@@ -176,15 +177,16 @@ lists every message the module shows.
 - **The Frontend tab stays blank.** The frontend refused the frame. Step 4 of
   the [Quick start](#quick-start) has the fix.
 - **"Preview request failed with HTTP 404 for ...".** Drupal has no preview of
-  this node for the editor. Check that the editor pressed Preview, and that
-  the frontend and Drupal share a parent domain. On your own computer, use one
+  this node for the editor. Check that the editor pressed Preview. Without a
+  token, check that the frontend and Drupal share a parent domain. On your own computer, use one
   host name for both: `localhost` and `127.0.0.1` count as different. Then
   check the CORS settings.
 - **"The preview endpoint is not on this site or its Drupal site: ...".** Add
   the preview's origin to the `origins` option.
 - **"The URL fragment has no preview endpoint."** Put
   `[jsonapi_node_preview_path]` or `[jsonapi_node_preview]` after the `#` in
-  the target URL.
+  the target URL. Use `[jsonapi_node_preview]` for a Drupal site other than
+  `druxt.baseUrl`.
 
 ## More documentation
 

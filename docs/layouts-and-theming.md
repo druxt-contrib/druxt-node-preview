@@ -14,11 +14,13 @@ druxt: {
 
 Then, on the consumer in Drupal, add one layout name in each **Preview
 layouts** box. Put `default` first, because the preview opens in the first one.
-Add `&layout=[layout]` to the target URL, before the `#`.
+Add `&layout=[layout]` to the target URL, after `?vm=[view_mode]` and before
+the `#`.
 
 With [automatic registration](registration.md), the module sends the
 `layouts` option to Drupal in place of those boxes. List `default` first
-there too, for the same reason.
+there too, for the same reason. When `layouts` is empty, the module sends no
+layouts, and Drupal keeps the consumer's own boxes.
 
 This needs Nuxt's default history router. With `router: { mode: 'hash' }`,
 the route itself goes after the `#`, so the page can read neither the layout
@@ -92,11 +94,15 @@ preview:
 
 ```js
 const preview = this.$store.state.druxtNodePreview || {}
-if (preview.active) {
+if (preview.active && inPreview) {
   // Read the resource from the Druxt store here.
   return
 }
 ```
+
+Here `inPreview` is true when the preview document has the resource. A
+resource the document lacks still needs its fetch. The store has only what
+the document includes, so add deeper paths to the `include` option.
 
 The store has two values. `active` is true while a preview is in the store.
 `uuid` is the previewed node's UUID then, and `null` otherwise. A component

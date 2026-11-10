@@ -33,11 +33,14 @@ and a scope of its own, on the same consumer.
 
 2. Make Simple OAuth's keys in a folder of the site's own, outside the web
    root, and set their paths. The paths are also at **Administration >
-   Configuration > People > Simple OAuth**. For a site whose web root is
-   `/srv/example.com/web`:
+   Configuration > People > Simple OAuth**. Close the folder to other users
+   before the keys go in, even if it already exists. Drupal's PHP user must
+   still own it, or it can't read the keys. For a site whose web root is
+   `/srv/example.com/web`, run this as that user:
 
    ```sh
-   mkdir -p /srv/example.com/oauth-keys
+   mkdir -p -m 700 /srv/example.com/oauth-keys
+   chmod 700 /srv/example.com/oauth-keys
    drush simple-oauth:generate-keys /srv/example.com/oauth-keys
    drush config:set simple_oauth.settings public_key /srv/example.com/oauth-keys/public.key -y
    drush config:set simple_oauth.settings private_key /srv/example.com/oauth-keys/private.key -y
@@ -79,7 +82,8 @@ and a scope of its own, on the same consumer.
    does.
 
 8. Set `DRUXT_NODE_PREVIEW_CLIENT_SECRET` to the consumer's secret where Nuxt
-   runs. Then start Nuxt. The build output says that it registered the
+   runs, or `DRUXT_NODE_PREVIEW_REGISTER_SECRET` with a `backend`. Then start
+   Nuxt. The build output says that it registered the
    target.
 
 Steps 1 to 8 set up only the registration. For a target that reads with a
