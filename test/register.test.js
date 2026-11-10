@@ -1022,9 +1022,10 @@ describe('removeRegistered', () => {
   const RUN = Symbol.for('druxt-node-preview.register')
   const TIMER = Symbol.for('druxt-node-preview.register.timer')
   const REMOVING = Symbol.for('druxt-node-preview.removing')
+  const PENDING = Symbol.for('druxt-node-preview.register.pending')
   const reset = () => {
     clearInterval(process[TIMER])
-    for (const key of [RUN, TIMER, REMOVING]) delete process[key]
+    for (const key of [RUN, TIMER, PENDING, REMOVING]) delete process[key]
   }
   beforeEach(reset)
   afterEach(() => {
@@ -1050,6 +1051,61 @@ describe('removeRegistered', () => {
     // nuxt dev restarts after a config change: the new copy registers.
     registerOnce(run, 60000)
     expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('waits for a repeat registration that is still running', async () => {
+    jest.useFakeTimers()
+    const order = []
+    let finish
+    let calls = 0
+    const run = () => {
+      calls += 1
+      if (calls === 1) return Promise.resolve('registered')
+      return new Promise((resolve) => {
+        finish = () => {
+          order.push('registered again')
+          resolve('registered')
+        }
+      })
+    }
+    registerOnce(run, 60000)
+    jest.advanceTimersByTime(60000)
+    const removing = removeRegistered(async () => order.push('removed'))
+    await Promise.resolve()
+    expect(order).toEqual([])
+    finish()
+    await removing
+    expect(order).toEqual(['registered again', 'removed'])
+  })
+
+  test('waits for overlapping repeat registrations', async () => {
+    jest.useFakeTimers()
+    const finishes = []
+    const order = []
+    let calls = 0
+    const run = () => {
+      calls += 1
+      if (calls === 1) return Promise.resolve('registered')
+      const n = calls
+      return new Promise((resolve) => {
+        finishes.push(() => {
+          order.push(`run ${n}`)
+          resolve('registered')
+        })
+      })
+    }
+    registerOnce(run, 60000)
+    // Two repeats start before either ends.
+    jest.advanceTimersByTime(120000)
+    expect(finishes).toHaveLength(2)
+    const removing = removeRegistered(async () => order.push('removed'))
+    finishes[1]()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(order).toEqual(['run 3'])
+    finishes[0]()
+    await removing
+    expect(order).toEqual(['run 3', 'run 2', 'removed'])
   })
 
   test('removes nothing when nothing registered', async () => {

@@ -677,6 +677,7 @@ const RUN = Symbol.for('druxt-node-preview.register')
 const TIMER = Symbol.for('druxt-node-preview.register.timer')
 const CLEANUP = Symbol.for('druxt-node-preview.cleanup')
 const REMOVING = Symbol.for('druxt-node-preview.removing')
+const PENDING = Symbol.for('druxt-node-preview.register.pending')
 
 /**
  * Starts the registration once per process, and repeats it on an interval.
@@ -692,8 +693,16 @@ const REMOVING = Symbol.for('druxt-node-preview.removing')
  */
 export const registerOnce = (run, interval = HEARTBEAT) => {
   if (!process[RUN]) {
-    process[RUN] = run()
-    process[TIMER] = setInterval(run, interval)
+    // Every registration still running, so a removal can wait for them all.
+    const pending = (process[PENDING] = new Set())
+    const tracked = () => {
+      const registration = Promise.resolve(run())
+      pending.add(registration)
+      registration.finally(() => pending.delete(registration))
+      return registration
+    }
+    process[RUN] = tracked()
+    process[TIMER] = setInterval(tracked, interval)
     process[TIMER].unref?.()
   }
   return process[RUN]
@@ -702,8 +711,9 @@ export const registerOnce = (run, interval = HEARTBEAT) => {
 /**
  * Stops registering and removes the target, once.
  *
- * It waits for a registration that is still running, so the removal comes
- * after it, and gives up after a few seconds in all. A second call while it
+ * It waits for every registration that is still running, the first and
+ * any repeat, so no PATCH lands after the DELETE. It gives up after a few
+ * seconds in all. A second call while it
  * runs gets the same promise. After it, registerOnce() registers again, as a
  * nuxt dev that restarts after a config change needs.
  *
@@ -718,13 +728,15 @@ export const removeRegistered = (remove) => {
   clearInterval(process[TIMER])
   let timer
   process[REMOVING] = Promise.race([
-    Promise.resolve(process[RUN]).then(remove),
+    Promise.allSettled([process[RUN], ...(process[PENDING] || [])]).then(
+      remove
+    ),
     new Promise((resolve) => {
       timer = setTimeout(resolve, SHUTDOWN_LIMIT)
     }),
   ]).then(() => {
     clearTimeout(timer)
-    for (const key of [RUN, TIMER, REMOVING]) delete process[key]
+    for (const key of [RUN, TIMER, PENDING, REMOVING]) delete process[key]
   })
   return process[REMOVING]
 }
