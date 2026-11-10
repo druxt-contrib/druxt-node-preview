@@ -98,7 +98,7 @@ default:
 - Each registration asks Drupal to keep the target for `expiresIn`, twice
   `interval` by default. A server that stops registering then leaves the
   picker after that time, however it stopped. Drupal caps the time at its
-  **Delete after** limit, and cron deletes the target later.
+  **Delete after** limit, and the first cron run after the target expires deletes it.
 - When the server gets `SIGINT` or `SIGTERM`, as from Ctrl+C or a host
   stopping it, the module stops registering and removes the target with a
   DELETE. It waits a few seconds at most, then the server stops as it would

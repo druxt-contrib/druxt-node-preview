@@ -703,8 +703,8 @@ export const registerOnce = (run, interval = HEARTBEAT) => {
  *
  * It listens once per process. On a signal, it stops registering, waits for
  * a registration that is still running, and removes the target, for no more
- * than a few seconds in all. Then the signal goes on as if nothing had
- * listened, so the process stops as it would have. Nuxt's own close is not
+ * than a few seconds in all. Then it sends the signal again, so the process
+ * stops as it would have. Nuxt's own close is not
  * a shutdown: nuxt dev closes and starts again after a config change.
  *
  * @param {Function} remove - Removes the target, and returns its promise.
@@ -722,9 +722,10 @@ export const removeOnShutdown = (remove) => {
       }),
     ])
     clearTimeout(timer)
-    // Another listener, such as Nuxt's, stops the process itself. Otherwise
-    // the signal is sent again, now with no listener, so Node stops it.
-    if (!process.listenerCount(signal)) process.kill(process.pid, signal)
+    // The signal goes out again, now that this listener has gone. With no
+    // listener left, Node stops the process. A listener such as signal-exit,
+    // which nuxt dev loads, stops it only once its own are the only ones.
+    process.kill(process.pid, signal)
   }
   process[CLEANUP] = stop
   for (const name of SIGNALS) process.on(name, stop)

@@ -956,13 +956,41 @@ describe('removeOnShutdown', () => {
     expect(order).toEqual(['registered', 'removed'])
   })
 
-  test('leaves the stop to another listener when there is one', async () => {
+  test('sends the signal on even when another listener is left', async () => {
     alone()
-    const other = jest.fn()
-    process.on('SIGINT', other)
+    process.on('SIGINT', jest.fn())
     removeOnShutdown(jest.fn().mockResolvedValue('removed'))
     await process[CLEANUP]('SIGINT')
-    expect(kill).not.toHaveBeenCalled()
+    expect(kill).toHaveBeenCalledWith(process.pid, 'SIGINT')
+  })
+
+  // nuxt dev loads signal-exit, which stops the process only when its own
+  // listeners are the only ones left. The signal must reach it once more,
+  // after this module's listener has gone.
+  test('lets signal-exit stop the process after the removal', async () => {
+    alone()
+    let exited = false
+    // Delivers a signal as Node does: to each listener, or with none, it
+    // stops the process.
+    const deliver = (signal) => {
+      const listeners = process.listeners(signal)
+      if (!listeners.length) exited = true
+      for (const listener of listeners) listener(signal)
+    }
+    kill.mockImplementation((pid, signal) => deliver(signal))
+    const signalExit = jest.requireActual('signal-exit')
+    const removeExitHandler = signalExit(() => {})
+    try {
+      const remove = jest.fn().mockResolvedValue('removed')
+      removeOnShutdown(remove)
+      deliver('SIGINT')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(remove).toHaveBeenCalledTimes(1)
+      expect(exited).toBe(true)
+    } finally {
+      removeExitHandler()
+      signalExit.unload()
+    }
   })
 
   test('stops after 8 seconds when the removal hangs', async () => {
