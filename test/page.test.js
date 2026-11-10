@@ -30,6 +30,12 @@ describe('DruxtNodePreviewPage', () => {
     jest.restoreAllMocks()
   })
 
+  // DruxtEntity looks for a wrapper called DruxtNodePreviewPage for a bundle
+  // called page, so the route's page must not have that name.
+  test('has a name no preview wrapper uses', () => {
+    expect(Page.name).toBe('DruxtNodePreviewRoute')
+  })
+
   test('the server render tells caches and search engines to keep nothing', () => {
     const res = { headersSent: false, setHeader: jest.fn() }
     Page.middleware({ res })
@@ -54,6 +60,20 @@ describe('DruxtNodePreviewPage', () => {
     expect(res.setHeader).toHaveBeenCalledWith(
       'Cache-Control',
       'no-transform, max-age=60, no-store'
+    )
+  })
+
+  test('a quoted directive value keeps its commas', () => {
+    const headers = { 'cache-control': 'private="set-cookie,x-id", max-age=0' }
+    const res = {
+      headersSent: false,
+      getHeader: (name) => headers[name.toLowerCase()],
+      setHeader: jest.fn(),
+    }
+    Page.middleware({ res })
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private="set-cookie,x-id", max-age=0, no-store'
     )
   })
 

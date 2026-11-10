@@ -25,7 +25,6 @@
     "./package.json": "./package.json"
   },
   "main": "dist/index.ssr.js",
-  "module": "dist/index.esm.js",
   "files": [
     "dist",
     "templates",
@@ -36,7 +35,6 @@
     "build:watch": "siroc build --watch",
     "changeset": "changeset",
     "hooks:install": "git config core.hooksPath .githooks",
-    "prepare": "node scripts/postinstall.mjs",
     "lint": "npm run lint:js && npm run lint:format && npm run lint:md && npm run lint:cspell && npm run lint:private && npm run lint:attribution && npm run lint:knip",
     "lint:attribution": "bash .gitlab/scripts/check-attribution.sh",
     "lint:audit": "npm audit --omit=dev --audit-level=high",
@@ -51,6 +49,7 @@
     "lint:prose": "PROSE_LINT_GLOB='!{.changeset/**,example/drupal/**,CHANGELOG.md}' bash .gitlab/scripts/lint-prose.sh --all",
     "lint:prose:install": "bash .gitlab/scripts/install-vale.sh .vale/bin .vale/styles",
     "prepack": "npm run build",
+    "prepare": "node scripts/postinstall.mjs",
     "release:version": "changeset version && npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
     "test": "jest",
     "test:e2e": "playwright test",
@@ -78,6 +77,7 @@
     "jest-environment-jsdom": "27.5.1",
     "jest-junit": "^15.0.0",
     "knip": "2.43.0",
+    "lodash": "^4.18.1",
     "markdownlint-cli2": "0.10.0",
     "prettier": "3.3.3",
     "siroc": "0.16.0",

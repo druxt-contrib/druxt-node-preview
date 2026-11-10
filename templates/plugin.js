@@ -1,15 +1,18 @@
 /**
  * The $druxtNodePreview plugin.
  *
- * Fetches a JSON:API Node Preview document with the editor's Drupal session,
- * and seeds the Druxt store with it so DruxtEntity renders the unsaved data.
+ * Fetches a JSON:API Node Preview document and seeds the Druxt store with it,
+ * so DruxtEntity renders the unsaved data. The request carries the editor's
+ * Drupal session, or a preview token from the URL fragment for a frontend on
+ * another site.
  *
  * It also registers the `druxtNodePreview` store module. Its `active` state is
  * true while a preview is seeded, so a site component that refetches its data
  * (for example paragraphs at a revision) can skip that and read the store.
  *
  * Leaving the preview route flushes the seeded resources from the Druxt store
- * and clears `active`, so the next page renders the saved content.
+ * and clears `active`, so the next page renders the saved content. It also
+ * forgets the preview token.
  */
 export default ({ app, store }, inject) => {
   const include = JSON.parse('<%= JSON.stringify(options.include) %>')
@@ -23,8 +26,11 @@ export default ({ app, store }, inject) => {
 
   // Separates the endpoint from a token in the URL fragment.
   const TOKEN_MARK = ';token='
-  // The token, once read and taken out of the address, and its endpoint.
+  // The token, once read and taken out of the address, its endpoint, and
+  // when it was read.
   let kept = null
+  // The endpoint whose token the page dropped because it had expired.
+  let stale = null
   // vue-router normalises the URL, which collapses the double slash after the
   // scheme inside the fragment. This repairs it.
   const repair = (endpoint) =>
@@ -43,11 +49,16 @@ export default ({ app, store }, inject) => {
 
   // Where the tab keeps the token for a reload.
   const TOKEN_STORE = 'druxtNodePreview.token'
+  // The longest the page keeps a token, in milliseconds. It matches the
+  // default lifetime of a Consumer Node Preview token, and holds for a token
+  // whose expiry the page can't read.
+  const TOKEN_LIFETIME = 15 * 60 * 1000
 
   /**
    * Whether a token is a JWT whose expiry has passed.
    *
-   * A token without a readable expiry counts as live, and Drupal decides.
+   * A token without a readable expiry counts as live here. The kept token's
+   * age limit still applies to it.
    *
    * @param {string} token - The token.
    *
@@ -66,11 +77,139 @@ export default ({ app, store }, inject) => {
     }
   }
 
+  /**
+   * Runs a sessionStorage call, and ignores storage that is off.
+   *
+   * @param {Function} call - Gets the storage, and returns the result.
+   *
+   * @returns {*} The result, or null when storage is off.
+   */
+  const storage = (call) => {
+    try {
+      return call(window.sessionStorage)
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Forgets the kept token, in this page and in the tab.
+   */
+  const forget = () => {
+    kept = null
+    storage((tab) => tab.removeItem(TOKEN_STORE))
+  }
+
+  /**
+   * Whether a page that frames this one may hand it a token.
+   *
+   * Any link can put a token in the fragment. Only Drupal's preview screen
+   * should, and it shows the page in a frame. So a token counts only when the
+   * page is in a frame on this site, Druxt's Drupal site or an allowed origin.
+   * The browser gives the framing origin in location.ancestorOrigins. A
+   * browser without it gives the referrer, which the frame's first load gets
+   * from the page that framed it.
+   *
+   * @returns {boolean} True when an allowed origin frames the page.
+   */
+  const framedByDrupal = () => {
+    if (window.parent === window) return false
+    const ancestors = window.location.ancestorOrigins
+    let framer = ancestors && ancestors.length ? ancestors[0] : null
+    if (!framer) {
+      try {
+        framer = new URL(document.referrer).origin
+      } catch {
+        return false
+      }
+    }
+    return [window.location.origin, drupal, ...origins].includes(framer)
+  }
+
+  /**
+   * Takes the token out of a raw fragment, and keeps it when it may be used.
+   *
+   * @param {string} raw - The fragment, without the "#".
+   *
+   * @returns {object|null} The fragment without the token, as `address`, and
+   *   the token the page may use, or null when the fragment has no token.
+   */
+  const take = (raw) => {
+    let endpoint
+    let token
+    try {
+      ;[endpoint, token] = fragment(raw)
+    } catch {
+      // A fragment that is not a preview, such as "#section%", has no token.
+      return null
+    }
+    if (!token) return null
+    // The address keeps the endpoint as it was encoded, so it reads the same
+    // when the page loads again.
+    const at = raw.indexOf(TOKEN_MARK)
+    const address = at === -1 ? encodeURIComponent(endpoint) : raw.slice(0, at)
+    // A token from a page that isn't Drupal's is never kept or sent. The
+    // page reads with the session instead.
+    if (!framedByDrupal()) return { address, token: null }
+    // An expired token would fail where the session might not, so the page
+    // leaves it out.
+    if (expired(token)) {
+      stale = repair(endpoint)
+      return { address, token: null }
+    }
+    stale = null
+    kept = { endpoint, token, saved: Date.now() }
+    // A reload starts a new page from the address without the token. The
+    // tab's session storage keeps it for that, out of any logged address.
+    // Without storage, the page reads the token only once.
+    storage((tab) => tab.setItem(TOKEN_STORE, JSON.stringify(kept)))
+    return { address, token }
+  }
+
+  /**
+   * Returns the kept token for an endpoint, or null.
+   *
+   * @param {string} endpoint - The endpoint in the address.
+   *
+   * @returns {string|null} The token.
+   */
+  const keptFor = (endpoint) => {
+    if (!kept) {
+      kept = storage((tab) => JSON.parse(tab.getItem(TOKEN_STORE)))
+      // Use only what this plugin stored: an endpoint, a token and a time.
+      // Anything else leaves the tab's storage, as an expired token does.
+      if (
+        !kept ||
+        typeof kept.endpoint !== 'string' ||
+        typeof kept.token !== 'string' ||
+        typeof kept.saved !== 'number'
+      ) {
+        forget()
+      }
+    }
+    // A kept token that has expired, or is too old, would fail where the
+    // session might not, so the page drops it. So does a time to come, which
+    // this plugin never stores.
+    const age = kept ? Date.now() - kept.saved : 0
+    if (kept && (expired(kept.token) || age < 0 || age >= TOKEN_LIFETIME)) {
+      stale = repair(kept.endpoint)
+      forget()
+    }
+    return kept && repair(kept.endpoint) === repair(endpoint)
+      ? kept.token
+      : null
+  }
+
   // Drupal gives every JSON:API resource a UUID, and a JSON:API Node Preview
   // URL ends in /{uuid}/preview.
-  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
-  const PREVIEW_PATH =
-    /\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/preview$/
+  const UUID_PATTERN =
+    '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+  const UUID = new RegExp('^' + UUID_PATTERN + '$')
+  const PREVIEW_PATH = new RegExp('/(' + UUID_PATTERN + ')/preview$')
+  // The same, with the entity type and bundle before the UUID.
+  const TYPED_PREVIEW_PATH = new RegExp(
+    '/([^/]+)/([^/]+)/' + UUID_PATTERN + '/preview$'
+  )
 
   /**
    * Returns the node's UUID from a preview endpoint, or throws.
@@ -189,14 +328,17 @@ export default ({ app, store }, inject) => {
   // When that code fails to download, Nuxt reloads the page, which resets
   // this. A site guard that cancels the leave with next(false) leaves it set
   // until the next navigation, because vue-router has no hook for that.
-  let left = false
+  let leaving = false
 
   // Before the next route loads, so none of its components read a seeded
   // resource. Druxt then fetches the saved one.
   if (app.router) {
     app.router.beforeEach((to, from, next) => {
       if (isPreview(from) && !isPreview(to)) {
-        left = true
+        leaving = true
+        // The token was for this preview only.
+        forget()
+        stale = null
         if (seeded.length) {
           for (const { type, id } of seeded.splice(0)) {
             store.commit('druxt/flushResource', { type, id })
@@ -204,10 +346,43 @@ export default ({ app, store }, inject) => {
           store.commit('druxtNodePreview/stop')
         }
       } else if (isPreview(to)) {
-        left = false
+        leaving = false
+      }
+      // Nuxt builds its first route from the address before this plugin
+      // takes the token out. So the route keeps the token, and a page view
+      // tracker on the router would log it. This takes it out of the route,
+      // and the redirect takes it out of the address too.
+      const taken = to.hash ? take(to.hash.slice(1)) : null
+      if (taken) {
+        next({
+          path: to.path,
+          query: to.query,
+          hash: '#' + taken.address,
+          replace: true,
+        })
+        return
       }
       next()
     })
+  }
+
+  /**
+   * Returns the configured include paths for an endpoint.
+   *
+   * The option is a list for every previewed type, or an object of lists
+   * keyed by JSON:API type, such as `node--page`. JSON:API rejects a path
+   * that the type does not have, so a path only some bundles have goes in
+   * the object form.
+   *
+   * @param {string} url - The endpoint, from Consumer Node Preview:
+   *   `.../{entity type}/{bundle}/{uuid}/preview`.
+   *
+   * @returns {string[]} The include paths.
+   */
+  const includeFor = (url) => {
+    if (Array.isArray(include)) return include
+    const match = url.split('?')[0].match(TYPED_PREVIEW_PATH)
+    return (match && include[match[1] + '--' + match[2]]) || []
   }
 
   /**
@@ -238,26 +413,9 @@ export default ({ app, store }, inject) => {
     return base + '?' + [...params, 'include=' + merged.join(',')].join('&')
   }
 
-  /**
-   * Returns the configured include paths for an endpoint.
-   *
-   * The option is a list for every previewed type, or an object of lists
-   * keyed by JSON:API type, such as `node--page`. JSON:API rejects a path
-   * that the type does not have, so a path only some bundles have goes in
-   * the object form.
-   *
-   * @param {string} url - The endpoint, from Consumer Node Preview:
-   *   `.../{entity type}/{bundle}/{uuid}/preview`.
-   *
-   * @returns {string[]} The include paths.
-   */
-  function includeFor(url) {
-    if (Array.isArray(include)) return include
-    const match = url
-      .split('?')[0]
-      .match(/\/([^/]+)\/([^/]+)\/[0-9a-f-]{36}\/preview$/)
-    return (match && include[match[1] + '--' + match[2]]) || []
-  }
+  // The error when an expired token was dropped and the session failed too.
+  const EXPIRED =
+    'The preview token has expired. Press Preview in Drupal again.'
 
   /**
    * Builds an error that carries the status and the start of the body.
@@ -312,78 +470,38 @@ export default ({ app, store }, inject) => {
     },
 
     /**
-     * Returns the token from the URL fragment, for a frontend on another site.
+     * Takes the token out of the URL fragment, and returns the token to use.
+     *
+     * The token is for a frontend on another site, where the editor's session
+     * doesn't reach. An error tracker or session recorder on the page can log
+     * the address, so this takes the token out of it with replaceState, and
+     * keeps it in the tab's session storage for a reload. A token comes only
+     * from a page that Drupal frames. Without one in the address, this returns
+     * the kept token for the address's endpoint.
      *
      * @returns {string|null} The token, or null when the preview reads with
      *   the editor's session.
      */
-    token: () => {
+    takeToken: () => {
       const raw = (window.location.hash || '').slice(1)
-      let endpoint
-      let token
+      const taken = take(raw)
+      if (taken) {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          window.location.pathname +
+            window.location.search +
+            '#' +
+            taken.address
+        )
+        return taken.token
+      }
       try {
-        ;[endpoint, token] = fragment(raw)
+        return keptFor(fragment(raw)[0])
       } catch {
         // A fragment that is not a preview, such as "#section%", has no token.
         return null
       }
-      if (token) {
-        // An expired token would fail where the session might not, so the
-        // page leaves it out. It still leaves the address.
-        const live = !expired(token)
-        if (live) {
-          kept = { endpoint, token }
-          // A reload starts a new page from the address without the token.
-          // The tab's session storage keeps it for that, out of any logged
-          // address.
-          try {
-            window.sessionStorage.setItem(TOKEN_STORE, JSON.stringify(kept))
-          } catch {
-            // Storage can be off. The page then reads the token only once.
-          }
-        }
-        // An error tracker or session recorder on the page can log the
-        // address. So the token leaves it, and the page keeps it here.
-        // The address keeps the endpoint as it was encoded, so it reads the
-        // same when the page loads again.
-        const at = raw.indexOf(TOKEN_MARK)
-        const address =
-          at === -1 ? encodeURIComponent(endpoint) : raw.slice(0, at)
-        window.history.replaceState(
-          window.history.state,
-          '',
-          window.location.pathname + window.location.search + '#' + address
-        )
-        return live ? token : null
-      }
-      if (!kept) {
-        try {
-          kept = JSON.parse(window.sessionStorage.getItem(TOKEN_STORE))
-        } catch {
-          kept = null
-        }
-        // Use only what this plugin stored: an endpoint and a token.
-        if (
-          !kept ||
-          typeof kept.endpoint !== 'string' ||
-          typeof kept.token !== 'string'
-        ) {
-          kept = null
-        }
-      }
-      // A kept token that has expired would fail where the session might
-      // not, so the page drops it.
-      if (kept && expired(kept.token)) {
-        kept = null
-        try {
-          window.sessionStorage.removeItem(TOKEN_STORE)
-        } catch {
-          // Storage can be off.
-        }
-      }
-      return kept && repair(kept.endpoint) === repair(endpoint)
-        ? kept.token
-        : null
     },
 
     /**
@@ -406,7 +524,11 @@ export default ({ app, store }, inject) => {
     fetch: async (endpoint) => {
       const uuid = checkEndpoint(endpoint)
       const url = withInclude(endpoint)
-      const token = plugin.token()
+      const token = plugin.takeToken()
+      // The page dropped this preview's token because it had expired. When
+      // the session can't read the preview either, the editor needs a new
+      // token, so the error says that.
+      const renew = !token && stale !== null && stale === repair(endpoint)
       const headers = {
         Accept: 'application/vnd.api+json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -424,6 +546,7 @@ export default ({ app, store }, inject) => {
             withCredentials: !token,
           })
         } catch (error) {
+          if (renew) throw new Error(EXPIRED)
           const failed = error.response || {}
           if (!failed.status) throw error
           const body =
@@ -438,11 +561,23 @@ export default ({ app, store }, inject) => {
         checkDocument(response.data, uuid)
         return response.data
       }
-      const response = await window.fetch(url, {
-        credentials: token ? 'omit' : 'include',
-        headers,
-      })
+      let response
+      try {
+        // A path resolves against the page's origin, which checkEndpoint()
+        // checked. window.fetch would resolve it against a base element.
+        response = await window.fetch(
+          new URL(url, window.location.origin).href,
+          {
+            credentials: token ? 'omit' : 'include',
+            headers,
+          }
+        )
+      } catch (error) {
+        if (renew) throw new Error(EXPIRED)
+        throw error
+      }
       if (!response.ok) {
+        if (renew) throw new Error(EXPIRED)
         throw failure(
           url,
           response.status,
@@ -470,7 +605,7 @@ export default ({ app, store }, inject) => {
     seed: (doc) => {
       // A fetch can end after the editor has left the preview. Then nothing
       // is seeded, so nothing unsaved reaches the next page.
-      if (left) return null
+      if (leaving) return null
       if (app.router && !isPreview(app.router.currentRoute)) return null
       checkDocument(doc)
       // DruxtEntity reads a resource under its language: its langcode prop,
@@ -489,14 +624,10 @@ export default ({ app, store }, inject) => {
 
   // Take the token out of the address before anything on the page reads it,
   // such as an analytics page view. The plugin keeps it for the preview. The
-  // router's first navigation writes back the address it started with, so
-  // take it out again once the router is ready. A script that runs before
-  // this plugin, such as one in the page head or an earlier plugin, can still
-  // read the token.
-  if (typeof window !== 'undefined') {
-    plugin.token()
-    if (app.router && app.router.onReady) app.router.onReady(plugin.token)
-  }
+  // router guard above then takes it out of the first route. A script that
+  // runs before this plugin, such as one in the page head or an earlier
+  // plugin, can still read the token.
+  if (typeof window !== 'undefined') plugin.takeToken()
 
   inject('druxtNodePreview', plugin)
 }

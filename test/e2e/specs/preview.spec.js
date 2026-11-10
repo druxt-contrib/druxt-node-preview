@@ -191,6 +191,51 @@ test.describe('druxt frontend', () => {
     ).toContainText(ADDED)
   })
 
+  // The consumer's token target reads the preview with a Consumer Node
+  // Preview token, as a frontend on another site would.
+  test('a token target reads the preview with the token, not the session', async ({
+    page,
+  }) => {
+    await editAndPreview(page)
+    const reads = []
+    page.on('request', (request) => {
+      if (/\/jsonapi\/.+\/preview(\?|$)/.test(request.url())) {
+        reads.push(request)
+      }
+    })
+    const frame = await pickFrontend(page, 'E2E Druxt token', DRUXT)
+    await expect(page.locator(FRAME)).toHaveAttribute('src', /;token=./)
+
+    const root = frame.locator('.druxt-node-preview')
+    await frameExpect(root).toContainText(EDITED)
+    await expect(root).toContainText(ADDED)
+
+    // The frontend picked before this one can have read the preview too, so
+    // only this frame's reads count. They went with the token, and without
+    // the session cookie.
+    const nuxt = await (
+      await page.locator(FRAME).elementHandle()
+    ).contentFrame()
+    const own = reads.filter(
+      (request) => request.method() === 'GET' && request.frame() === nuxt
+    )
+    expect(own.length).toBeGreaterThan(0)
+    for (const read of own) {
+      const headers = await read.allHeaders()
+      expect(headers.authorization).toMatch(/^Bearer ./)
+      expect(headers.cookie).toBeUndefined()
+    }
+
+    // The token is gone from the route, where a page view tracker reads.
+    const route = await nuxt.evaluate(() => ({
+      fullPath: window.$nuxt.$route.fullPath,
+      hash: window.location.hash,
+    }))
+    expect(route.fullPath).toContain('/jsonapi/')
+    expect(route.fullPath).not.toContain('token=')
+    expect(route.hash).not.toContain('token=')
+  })
+
   test.describe('automatic registration', () => {
     // run.sh starts the Druxt frontend with the register options and the
     // e2e consumer's secret. The frontend registers its target on start,
@@ -213,6 +258,10 @@ test.describe('druxt frontend', () => {
           {
             label: 'Kept',
             url: 'https://kept.example.com/preview?vm=[view_mode]#[jsonapi_node_preview]',
+          },
+          {
+            label: 'E2E Druxt token',
+            url: `${DRUXT}/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path];token=[preview_token]`,
           },
           {
             label: label(),

@@ -23,6 +23,7 @@ markdownlint
 mbstring
 normalises
 Nuxt
+nuxtjs
 nvmrc
 opencode
 refetches

@@ -36,15 +36,19 @@ const toOrigin = (url) => {
  *
  * @param {*} url - The URL as set.
  *
- * @returns {string} Its scheme and host, or the value without anything before
- *   an "@" when it isn't a URL.
+ * @returns {string} Its scheme and host, or, when it doesn't parse, the value
+ *   without a user name and password.
  */
 const forLog = (url) => {
   try {
     const { protocol, host } = new URL(url)
     return protocol + '//' + host
   } catch {
-    return String(url).replace(/^[^/]*@/, '')
+    // Drop a user name and password before the host, after a scheme or not.
+    // Up to the last "@" before the path, because a password can hold one.
+    return String(url)
+      .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, '$1')
+      .replace(/^[^/?#]*@/, '')
   }
 }
 
@@ -148,16 +152,19 @@ const toLayouts = (value) => {
  * The DruxtNodePreview Nuxt module.
  *
  * Registers a client side page that renders a Drupal node preview. The page
- * reads the JSON:API Node Preview endpoint from the URL fragment, fetches it
- * with the editor's Drupal session, seeds the Druxt store with the preview
- * document, and renders the node through DruxtEntity.
+ * reads the JSON:API Node Preview endpoint from the URL fragment and fetches
+ * it. The request carries the editor's Drupal session, or a preview token
+ * that follows the endpoint in the fragment. The page then seeds the Druxt
+ * store with the preview document, and renders the node through DruxtEntity.
  *
  * The Drupal site points a Consumer Node Preview target at the page:
  *
- *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]&layout=[layout]#[jsonapi_node_preview_path]
+ *   https://frontend.example.com/druxt/node/preview?vm=[view_mode]#[jsonapi_node_preview_path]
  *
- * The page renders in the Nuxt layout named by `?layout=`, when that name is
- * in the `layouts` option. Any other name, or none, gives the default layout.
+ * A target for a frontend on another site adds `;token=[preview_token]` after
+ * the endpoint. A site with layouts adds `&layout=[layout]` to the query, and
+ * the page renders in the Nuxt layout it names, when that name is in the
+ * `layouts` option. Any other name, or none, gives the default layout.
  *
  * The route name, `druxt-node-preview`, is public. Sites hook it, so do not
  * change it.
@@ -257,14 +264,18 @@ const NuxtModule = function (moduleOptions = {}) {
   // before the request ends. Each request has a short timeout.
   if (register && this.nuxt) {
     this.nuxt.hook('ready', () =>
-      registerOnce(() =>
-        registerTarget({
-          ...register,
-          druxt: (this.options || {}).druxt || {},
-          baseUrl: ((this.options || {}).druxt || {}).baseUrl,
-          path: options.path,
-          layouts: pluginOptions.layouts,
-        })
+      registerOnce(
+        () =>
+          registerTarget({
+            ...register,
+            druxt: (this.options || {}).druxt || {},
+            // Druxt takes its axios options from here, for @nuxtjs/axios.
+            axios: (this.options || {}).axios,
+            baseUrl: ((this.options || {}).druxt || {}).baseUrl,
+            path: options.path,
+            layouts: pluginOptions.layouts,
+          }),
+        register.interval
       )
     )
   }

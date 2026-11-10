@@ -85,7 +85,8 @@ E2E_CLIENT_SECRET="$(openssl rand -hex 24)"
 # The recipe's consumer has a placeholder for the secret. A copy of the
 # recipe gets the real one, and the importer hashes it.
 cp -R "$ROOT/test/e2e/drupal/recipes/druxt_node_preview_e2e" "$WORK/recipe"
-sed -i "s/E2E_CLIENT_SECRET/$E2E_CLIENT_SECRET/" "$WORK/recipe/content/consumer/7e3f9a1c-2d4b-4c8e-a6f0-1b2c3d4e5f60.yml"
+# The token target points at the Druxt frontend's port.
+sed -i "s/E2E_CLIENT_SECRET/$E2E_CLIENT_SECRET/; s/:FRONTEND_DRUXT_PORT\//:$FRONTEND_DRUXT_PORT\//" "$WORK/recipe/content/consumer/7e3f9a1c-2d4b-4c8e-a6f0-1b2c3d4e5f60.yml"
 
 echo "==> Building Drupal (example/drupal)"
 cd "$ROOT/example/drupal"

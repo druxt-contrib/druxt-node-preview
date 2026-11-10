@@ -181,13 +181,31 @@ describe('DruxtNodePreview module', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
     const context = buildContext({
       baseUrl: "https://admin:hunter2@x'+y.example/path",
-      nodePreview: { origins: ["https://bob:password@y'+z.example"] },
+      // A URL the parser refuses still loses its user name and password.
+      nodePreview: {
+        origins: [
+          "https://bob:password@y'+z.example",
+          'https://eve:pa55@host:8_0',
+          // A password can hold an "@" of its own.
+          'https://mal:p@ssw0rd@host:9_0',
+        ],
+      },
     })
     NuxtModule.call(context)
     const logged = warn.mock.calls.map(([message]) => message).join('\n')
     expect(logged).toContain("x'+y.example")
     expect(logged).toContain("y'+z.example")
-    for (const secret of ['admin', 'hunter2', 'bob', 'password']) {
+    expect(logged).toContain('host:8_0')
+    for (const secret of [
+      'admin',
+      'hunter2',
+      'bob',
+      'password',
+      'eve',
+      'pa55',
+      'mal',
+      'ssw0rd',
+    ]) {
       expect(logged).not.toContain(secret)
     }
     warn.mockRestore()
@@ -343,6 +361,44 @@ describe('DruxtNodePreview module', () => {
         },
         layouts: ['default', 'preview'],
       })
+    })
+
+    test("registers with Nuxt's axios options, on the interval set", async () => {
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
+      jest.useFakeTimers()
+      const every = jest.spyOn(global, 'setInterval')
+      try {
+        const context = buildContext({
+          baseUrl: 'https://cms.example.com',
+          nodePreview: {
+            register: {
+              url: 'https://www.example.com',
+              consumer: 'frontend',
+              interval: 600000,
+            },
+          },
+        })
+        context.options.axios = { timeout: 60000 }
+        NuxtModule.call(context)
+        request
+          .mockResolvedValueOnce({
+            status: 200,
+            text: JSON.stringify({ access_token: 't' }),
+          })
+          .mockResolvedValueOnce({
+            status: 200,
+            text: JSON.stringify({ targets: [], layouts: [] }),
+          })
+        await context.hooks.ready()
+        expect(every.mock.calls[0][1]).toBe(600000)
+        expect(DruxtClient.mock.results[0].value.axios.defaults.timeout).toBe(
+          60000
+        )
+      } finally {
+        every.mockRestore()
+        jest.clearAllTimers()
+        jest.useRealTimers()
+      }
     })
 
     test('registers once per process, even when Nuxt runs the module again', async () => {

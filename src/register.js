@@ -9,9 +9,10 @@ import { DruxtClient } from 'druxt'
  * the target with the same label, or adds it, and records the time. The module
  * sends the PATCH again on a timer, so a running frontend's target stays active.
  *
- * Every request goes through a DruxtClient, so the site's `druxt.axios` options
- * apply, but a backend gets only their timeout and proxy, and nothing from the
- * global axios defaults. No request follows a redirect, so the secret never
+ * Every request goes through a DruxtClient, so the site's axios options apply.
+ * Those are Nuxt's own `axios` option, as Druxt reads it, then `druxt.axios`.
+ * A backend gets only their timeout and proxy, and nothing from the global
+ * axios defaults. No request follows a redirect, so the secret never
  * goes to another host. A failure never stops Nuxt, and no message holds the
  * secret or the token.
  */
@@ -20,10 +21,17 @@ const PREFIX = '[druxt-node-preview] '
 const TIMEOUT = 5000
 
 /**
- * The time between registrations, in milliseconds. Consumer Node Preview marks
- * a target inactive after a day, so a failed attempt or two does no harm.
+ * The default time between registrations, in milliseconds. Consumer Node
+ * Preview marks a target inactive after a day by default, so a failed attempt
+ * or two does no harm.
  */
 export const HEARTBEAT = 6 * 60 * 60 * 1000
+
+// The shortest time between registrations, in milliseconds.
+const MIN_INTERVAL = 60 * 1000
+// Node's timers take at most this, the largest 32-bit signed integer. A larger
+// delay runs the timer every millisecond instead.
+const MAX_INTERVAL = 2147483647
 
 const warn = (message) => console.warn(PREFIX + message)
 const info = (message) => console.info(PREFIX + message)
@@ -113,11 +121,15 @@ const rawBackend = (options, env) =>
  * reads the preview with a token instead of the editor's session. It is on
  * with a backend, and off otherwise.
  *
+ * DRUXT_NODE_PREVIEW_REGISTER_INTERVAL, or `interval`, is the time between
+ * registrations in milliseconds. A site whose Consumer Node Preview marks
+ * targets inactive sooner than a day sets it lower.
+ *
  * @param {*} value - The `register` option.
  * @param {object} env - The environment, such as process.env.
  *
- * @returns {object|null} The url, label, consumer, secret and token, and
- *   the backend when there is one.
+ * @returns {object|null} The url, label, consumer, secret, token and
+ *   interval, and the backend when there is one.
  */
 export const resolveRegister = (value, env) => {
   if (value === undefined || value === null || value === false) return null
@@ -129,9 +141,7 @@ export const resolveRegister = (value, env) => {
 
   // Say nothing about the value, so the message cannot give it away.
   if (options.secret !== undefined) {
-    warn(
-      'Ignored druxt.nodePreview.register.secret. Never put the secret in nuxt.config.js.'
-    )
+    warn('Ignored register.secret. Never put the secret in nuxt.config.js.')
   }
 
   const url = toBaseUrl(fromEnv(env, 'DRUXT_NODE_PREVIEW_URL') || options.url)
@@ -174,6 +184,29 @@ export const resolveRegister = (value, env) => {
     return null
   }
 
+  // A bad interval is not worth stopping registration for.
+  const envInterval = fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_INTERVAL')
+  const rawInterval =
+    envInterval === undefined
+      ? options.interval
+      : /^\d+$/.test(envInterval)
+        ? Number(envInterval)
+        : NaN
+  let interval = HEARTBEAT
+  if (rawInterval !== undefined) {
+    if (
+      Number.isInteger(rawInterval) &&
+      rawInterval >= MIN_INTERVAL &&
+      rawInterval <= MAX_INTERVAL
+    ) {
+      interval = rawInterval
+    } else {
+      warn(
+        `Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, from ${MIN_INTERVAL} to ${MAX_INTERVAL}.`
+      )
+    }
+  }
+
   // The default label is the frontend's host, so local, staging and production
   // each keep their own target on a shared consumer.
   const label =
@@ -186,6 +219,7 @@ export const resolveRegister = (value, env) => {
     consumer,
     secret,
     token,
+    interval,
     ...(backend ? { backend } : {}),
   }
 }
@@ -227,9 +261,12 @@ const TOKEN_HINTS = {
   401: CREDENTIALS,
   404: 'Install and set up the Simple OAuth module on Drupal.',
 }
+const OWNER =
+  'The consumer\'s Client credentials user must own the consumer, and the token\'s scope must give the "register consumer node preview targets" permission.'
+
 const TARGET_HINTS = {
-  401: 'The consumer\'s Client credentials user must own the consumer, and the token\'s scope must give the "register consumer node preview targets" permission.',
-  403: 'The consumer\'s Client credentials user must own the consumer, and the token\'s scope must give the "register consumer node preview targets" permission.',
+  401: OWNER,
+  403: OWNER,
   404: 'Check that Consumer Node Preview is installed, and that a consumer has this client ID.',
   405: 'Update Consumer Node Preview. This module needs a version with the PATCH method.',
   422: 'Check the register url and the path option.',
@@ -291,15 +328,37 @@ const forBackend = (defaults, options) => {
 }
 
 /**
+ * Returns the site's axios options for druxt.baseUrl.
+ *
+ * Druxt 0.25 takes them from Nuxt's own `axios` option, for @nuxtjs/axios,
+ * and deprecates `druxt.axios`. So Nuxt's option wins, and `druxt.axios` fills
+ * what it leaves out. Nuxt's `proxy` turns on @nuxtjs/proxy. It is not an
+ * axios proxy, so it is left out.
+ *
+ * @param {*} nuxt - Nuxt's axios option.
+ * @param {*} druxt - The druxt.axios option.
+ *
+ * @returns {object} The axios options.
+ */
+const siteAxios = (nuxt, druxt) => {
+  const object = (value) =>
+    value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  // eslint-disable-next-line no-unused-vars
+  const { proxy, ...own } = object(nuxt)
+  return { ...object(druxt), ...own }
+}
+
+/**
  * Sends a request, and returns the data of a 200 response.
  *
  * @param {object} client - The DruxtClient.
  * @param {object} config - The axios request.
  * @param {object} hints - What to check, keyed by status.
+ * @param {string} site - What to set to the URL Drupal redirects to.
  *
  * @returns {Promise<*>} The response data.
  */
-const send = async (client, config, hints) => {
+const send = async (client, config, hints, site) => {
   const { status, data, headers } = await client.axios.request({
     ...config,
     maxRedirects: 0,
@@ -309,7 +368,7 @@ const send = async (client, config, hints) => {
   if (status >= 300 && status < 400) {
     const location = headers?.location ? ` to ${headers.location}` : ''
     throw new Error(
-      `Drupal redirected ${config.url}${location} (HTTP ${status}). Set druxt.baseUrl to the URL Drupal redirects to.`
+      `Drupal redirected ${config.url}${location} (HTTP ${status}). Set ${site} to the URL Drupal redirects to.`
     )
   }
   throw new Error(
@@ -323,8 +382,8 @@ const send = async (client, config, hints) => {
  * It never throws. A failure prints a warning.
  *
  * @param {object} settings - The settings from resolveRegister(), with the
- *   baseUrl and druxt options, and the path and layouts options. A backend
- *   wins over baseUrl.
+ *   baseUrl and druxt options, Nuxt's axios option, and the path and layouts
+ *   options. A backend wins over baseUrl.
  *
  * @returns {Promise<string>} "registered" or "failed".
  */
@@ -333,6 +392,7 @@ export const registerTarget = async ({
   backend,
   token: useToken,
   druxt = {},
+  axios,
   url,
   label,
   consumer,
@@ -344,6 +404,7 @@ export const registerTarget = async ({
   try {
     if (!backend && !baseUrl) throw new Error('druxt.baseUrl is not set.')
     const base = (backend || baseUrl).replace(/\/+$/, '')
+    const redirectTo = backend ? 'the register backend' : 'druxt.baseUrl'
     const { protocol, hostname } = new URL(base)
     if (
       protocol === 'http:' &&
@@ -356,10 +417,11 @@ export const registerTarget = async ({
     // The site's axios options are for druxt.baseUrl, so a backend gets only
     // the timeout and proxy. Its client starts from axios's own defaults, so
     // its adapter is the one axios chose.
-    const { timeout = TIMEOUT, proxy } = druxt.axios || {}
+    const site = siteAxios(axios, druxt.axios)
+    const { timeout = TIMEOUT, proxy } = site
     const client = new DruxtClient(base, {
       ...druxt,
-      axios: backend ? { timeout } : { timeout: TIMEOUT, ...druxt.axios },
+      axios: backend ? { timeout } : { timeout: TIMEOUT, ...site },
     })
     if (backend) {
       forBackend(client.axios.defaults, {
@@ -383,7 +445,8 @@ export const registerTarget = async ({
           client_secret: secret,
         }).toString(),
       },
-      TOKEN_HINTS
+      TOKEN_HINTS,
+      redirectTo
     )
     token = answer?.access_token
     if (!token) throw new Error(`${base}/oauth/token gave no access token.`)
@@ -414,39 +477,44 @@ export const registerTarget = async ({
           ...(layouts.length ? { layouts: [...new Set(layouts)] } : {}),
         },
       },
-      TARGET_HINTS
+      TARGET_HINTS,
+      redirectTo
     )
     info(`Registered the preview target "${label}" on "${consumer}".`)
     return 'registered'
   } catch (error) {
-    // Hides the secret and the token, should Drupal ever echo one of them.
+    // Hides the secret and the token, should Drupal ever echo one of them,
+    // and any user name and password in a URL, such as druxt.baseUrl's.
     const message = [secret, token]
       .filter(Boolean)
       .reduce(
         (text, value) => text.split(value).join('[hidden]'),
         error.message
       )
+      // Up to the last "@" before the path, because a password can hold one.
+      .replace(/(\/\/)[^/?#\s]*@/g, '$1')
     warn(`Could not register the preview target: ${message}`)
     return 'failed'
   }
 }
 
 /**
- * Starts the registration once per process, and repeats it on the heartbeat.
+ * Starts the registration once per process, and repeats it on an interval.
  *
  * Nuxt can run the module more than once in a process, such as when nuxt dev
  * restarts after a config change. The state lives on the process, so a fresh
  * copy of this file finds it too. The timer does not keep a build alive.
  *
  * @param {Function} run - Starts the registration, and returns its promise.
+ * @param {number} [interval] - The milliseconds between registrations.
  *
  * @returns {Promise<string>} The first run's promise.
  */
-export const registerOnce = (run) => {
+export const registerOnce = (run, interval = HEARTBEAT) => {
   const key = Symbol.for('druxt-node-preview.register')
   if (!process[key]) {
     process[key] = run()
-    setInterval(run, HEARTBEAT).unref?.()
+    setInterval(run, interval).unref?.()
   }
   return process[key]
 }

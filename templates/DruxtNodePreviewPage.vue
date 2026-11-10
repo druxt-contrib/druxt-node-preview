@@ -35,7 +35,10 @@ const addDirective = (res, name, directive) => {
   const existing = res.getHeader ? res.getHeader(name) : undefined
   const directives = [existing]
     .flat()
-    .flatMap((value) => String(value || '').split(','))
+    // A comma inside a quoted value, such as private="a,b", is not a break.
+    .flatMap((value) =>
+      String(value || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+    )
     .map((value) => value.trim())
     .filter(Boolean)
   if (!directives.includes(directive)) directives.push(directive)
@@ -46,11 +49,15 @@ const addDirective = (res, name, directive) => {
  * Renders a Drupal node preview.
  *
  * This page only works in the browser. The preview endpoint arrives in the
- * URL fragment, which never reaches the server, and the fetch uses the
- * editor's Drupal session cookie. A server render shows "Loading preview...".
+ * URL fragment, which never reaches the server. The fetch uses the editor's
+ * Drupal session cookie, or a preview token from the fragment. A server
+ * render shows "Loading preview...".
+ *
+ * Its name is not DruxtNodePreviewPage, which is the wrapper name for a
+ * bundle called page.
  */
 export default {
-  name: 'DruxtNodePreviewPage',
+  name: 'DruxtNodePreviewRoute',
 
   components: { DruxtNodePreview },
 

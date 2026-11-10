@@ -86,6 +86,7 @@ describe('resolveRegister', () => {
       consumer: 'from-env',
       secret: SECRET,
       token: false,
+      interval: HEARTBEAT,
     })
   })
 
@@ -110,6 +111,7 @@ describe('resolveRegister', () => {
       consumer: 'frontend',
       secret: SECRET,
       token: false,
+      interval: HEARTBEAT,
     })
   })
 
@@ -151,7 +153,48 @@ describe('resolveRegister', () => {
     const output = warn.mock.calls.flat().join(' ')
     expect(output).toContain('Never put the secret in nuxt.config.js')
     expect(output).not.toContain(secret)
+    // The option can come from druxt.nodePreview or the module options.
+    expect(output).toContain('Ignored register.secret.')
   })
+
+  test('registers again every 6 hours by default', () => {
+    expect(resolveRegister(true, ENV).interval).toBe(HEARTBEAT)
+  })
+
+  test('takes the interval from the options or the environment', () => {
+    expect(resolveRegister({ interval: 600000 }, ENV).interval).toBe(600000)
+    // Node's timers stop at this, the largest 32-bit signed integer.
+    expect(resolveRegister({ interval: 2147483647 }, ENV).interval).toBe(
+      2147483647
+    )
+    expect(
+      resolveRegister(
+        { interval: 600000 },
+        { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_INTERVAL: ' 60000 ' }
+      ).interval
+    ).toBe(60000)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  test.each([[59999], [1.5], ['600000'], [-60000], [Infinity], [2147483648]])(
+    'the interval %j is ignored with a warning',
+    (interval) => {
+      const register = resolveRegister({ interval }, ENV)
+      expect(register.interval).toBe(HEARTBEAT)
+      expect(warn.mock.calls[0][0]).toBe(
+        '[druxt-node-preview] Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, from 60000 to 2147483647.'
+      )
+    }
+  )
+
+  test.each([['10m'], ['600000.5'], ['1e6'], ['59999'], ['2147483648']])(
+    'the interval %j from the environment is ignored with a warning',
+    (value) => {
+      const env = { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_INTERVAL: value }
+      expect(resolveRegister(true, env).interval).toBe(HEARTBEAT)
+      expect(warn.mock.calls[0][0]).toContain('register.interval')
+    }
+  )
 })
 
 describe('targetUrl', () => {
@@ -241,6 +284,49 @@ describe('registerTarget', () => {
 
     await registerTarget(settings({ druxt: { axios: { timeout: 60000 } } }))
     expect(clients[1].axios.defaults.timeout).toBe(60000)
+  })
+
+  // Druxt 0.25 takes its axios options from Nuxt's own axios option, for
+  // @nuxtjs/axios, and deprecates druxt.axios.
+  test("applies Nuxt's axios options before druxt.axios", async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    await registerTarget(
+      settings({
+        axios: { timeout: 60000, headers: { 'X-Site': 'yes' }, proxy: true },
+        druxt: { baseUrl: BASE, axios: { timeout: 1000, params: { a: 'b' } } },
+      })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.headers['X-Site']).toBe('yes')
+    expect(defaults.params).toEqual({ a: 'b' })
+    // Its proxy turns on @nuxtjs/proxy. It is not an axios proxy.
+    expect(defaults.proxy).toBeUndefined()
+
+    // druxt.axios fills what Nuxt's option leaves out.
+    await registerTarget(
+      settings({ axios: {}, druxt: { axios: { timeout: 1000 } } })
+    )
+    expect(clients[1].axios.defaults.timeout).toBe(1000)
+  })
+
+  test("a backend gets only the timeout of Nuxt's axios options", async () => {
+    answer(tokenOk(), saved())
+    await registerTarget(
+      settings({
+        backend: 'https://other.example.com',
+        token: true,
+        axios: {
+          timeout: 60000,
+          headers: { Authorization: 'Basic c2l0ZQ==' },
+          proxy: true,
+        },
+      })
+    )
+    const { defaults } = clients[0].axios
+    expect(defaults.timeout).toBe(60000)
+    expect(defaults.headers).toEqual({})
+    expect(defaults.proxy).toBeUndefined()
   })
 
   test('sends no site credentials to a backend', async () => {
@@ -384,6 +470,27 @@ describe('registerTarget', () => {
       expect(message).not.toContain(TOKEN)
     }
 
+    test('a user name and password in the base URL', async () => {
+      answer(json(404, {}))
+      await registerTarget(
+        settings({ baseUrl: 'https://admin:hunter2@cms.example.com' })
+      )
+      const [message] = warn.mock.calls[0]
+      expect(message).toContain('https://cms.example.com/oauth/token')
+      expect(message).not.toContain('admin')
+      expect(message).not.toContain('hunter2')
+    })
+
+    test('a password with an "@" in the base URL', async () => {
+      answer(json(404, {}))
+      await registerTarget(
+        settings({ baseUrl: 'https://admin:p@ssw0rd@cms.example.com' })
+      )
+      const [message] = warn.mock.calls[0]
+      expect(message).toContain('https://cms.example.com/oauth/token')
+      expect(message).not.toContain('ssw0rd')
+    })
+
     test('no base URL', async () => {
       await expect(
         registerTarget(settings({ baseUrl: undefined }))
@@ -403,6 +510,22 @@ describe('registerTarget', () => {
 
     test('a redirect without a location', () =>
       fails('HTTP 301', { status: 301, text: '' }))
+
+    test('a redirect from druxt.baseUrl says to set it', () =>
+      fails('Set druxt.baseUrl to the URL Drupal redirects to.', {
+        status: 301,
+        text: '',
+      }))
+
+    test('a redirect from a backend says to set the backend', async () => {
+      answer({ status: 301, text: '' })
+      await registerTarget(
+        settings({ backend: 'https://other.example.com', token: true })
+      )
+      expect(warn.mock.calls[0][0]).toContain(
+        'Set the register backend to the URL Drupal redirects to.'
+      )
+    })
 
     test.each([
       [404, 'Simple OAuth'],
@@ -468,6 +591,13 @@ describe('registerOnce', () => {
     await expect(registerOnce(second)).resolves.toBe('registered')
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).not.toHaveBeenCalled()
+  })
+
+  test('registers again on the interval it is given', () => {
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    jest.advanceTimersByTime(60000 * 3)
+    expect(run).toHaveBeenCalledTimes(4)
   })
 
   test('registers again on the heartbeat, within the inactive limit', () => {
