@@ -450,6 +450,23 @@ export default ({ app, store }, inject) => {
       typeof name === 'string' && layouts.includes(name) ? name : undefined,
 
     /**
+     * Whether the preview document has a resource.
+     *
+     * The preview stores each of its resources in the Druxt store, under the
+     * route's language. A component that fetches its own data can read such
+     * a resource from there instead. A resource the store held already, or
+     * that the document lacks, still needs its fetch. Leaving the preview
+     * empties the list.
+     *
+     * @param {string} type - The resource's JSON:API type.
+     * @param {string} id - The resource's UUID.
+     *
+     * @returns {boolean} Whether the preview stored the resource.
+     */
+    has: (type, id) =>
+      seeded.some((resource) => resource.type === type && resource.id === id),
+
+    /**
      * Returns the preview endpoint from the URL fragment.
      *
      * The fragment never reaches any server, so the preview URL stays out of

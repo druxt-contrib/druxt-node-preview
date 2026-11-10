@@ -901,6 +901,20 @@ describe('$druxtNodePreview plugin', () => {
     expect(commits[2].payload.resource.data.id).toBe(P2)
   })
 
+  test('has tells which resources the preview document has', () => {
+    const { injected } = buildPlugin()
+    expect(injected.value.has('node--article', UUID)).toBe(false)
+    injected.value.seed({
+      data: { type: 'node--article', id: UUID },
+      included: [{ type: 'paragraph--text', id: P1 }],
+    })
+    expect(injected.value.has('node--article', UUID)).toBe(true)
+    expect(injected.value.has('paragraph--text', P1)).toBe(true)
+    expect(injected.value.has('paragraph--text', P2)).toBe(false)
+    // The same id under another type is another resource.
+    expect(injected.value.has('node--page', UUID)).toBe(false)
+  })
+
   // Any link can set the fragment, and an allowed origin can serve other
   // JSON, such as a private file an attacker uploaded. Only a node preview
   // document may reach the store, where DruxtEntity renders it.
@@ -1015,6 +1029,8 @@ describe('$druxtNodePreview plugin', () => {
         { name: 'druxtNodePreview/stop', payload: undefined },
       ])
       expect(next).toHaveBeenCalledWith()
+      // The next page's components fetch their own data again.
+      expect(preview.injected.value.has('node--article', UUID)).toBe(false)
     })
 
     test('flushes only once', () => {

@@ -14,7 +14,13 @@ druxt: {
 
 Then, on the consumer in Drupal, add one layout name in each **Preview
 layouts** box. Put `default` first, because the preview opens in the first one.
-Add `&layout=[layout]` to the target URL, before the `#`.
+Add `&layout=[layout]` to the target URL, after `?vm=[view_mode]` and before
+the `#`.
+
+With [automatic registration](registration.md), the module sends the
+`layouts` option to Drupal in place of those boxes. List `default` first
+there too, for the same reason. When `layouts` is empty, the module sends no
+layouts, and Drupal keeps the consumer's own boxes.
 
 This needs Nuxt's default history router. With `router: { mode: 'hash' }`,
 the route itself goes after the `#`, so the page can read neither the layout
@@ -43,6 +49,9 @@ exists:
 3. `DruxtNodePreviewDefault`
 
 If none of them exists, the node renders in Druxt's plain wrapper.
+
+The preview page's own component is `DruxtNodePreviewRoute`. So a bundle
+called `page` can have a `DruxtNodePreviewPage` wrapper like any other.
 
 A wrapper gets any of these props that it declares:
 
@@ -84,11 +93,24 @@ content instead. Have it read the resource from the Druxt store during a
 preview:
 
 ```js
-if ((this.$store.state.druxtNodePreview || {}).active) {
+const preview = this.$store.state.druxtNodePreview || {}
+if (preview.active && this.$druxtNodePreview.has(type, id)) {
   // Read the resource from the Druxt store here.
   return
 }
 ```
+
+Here `type` and `id` are the resource's JSON:API type and UUID.
+`$druxtNodePreview.has()` is true only for a resource in the preview
+document. A saved copy of the resource, or one in another language, may be in
+the store too, so finding it there proves nothing. The preview stores its
+resources under the route's language, as `DruxtEntity` reads them. A resource
+the document lacks still needs its fetch, so add deeper paths to the
+`include` option.
+
+The store has two values. `active` is true while a preview is in the store.
+`uuid` is the previewed node's UUID then, and `null` otherwise. A component
+can compare `uuid` with its own node's to tell whether the preview is for it.
 
 Skipping the fetch is not enough on its own. A component that shows only what
 it fetched would then show nothing. A fetch that started before the preview
