@@ -676,6 +676,7 @@ export const removeTarget = async (settings) => {
 const RUN = Symbol.for('druxt-node-preview.register')
 const TIMER = Symbol.for('druxt-node-preview.register.timer')
 const CLEANUP = Symbol.for('druxt-node-preview.cleanup')
+const REMOVING = Symbol.for('druxt-node-preview.removing')
 
 /**
  * Starts the registration once per process, and repeats it on an interval.
@@ -699,13 +700,42 @@ export const registerOnce = (run, interval = HEARTBEAT) => {
 }
 
 /**
+ * Stops registering and removes the target, once.
+ *
+ * It waits for a registration that is still running, so the removal comes
+ * after it, and gives up after a few seconds in all. A second call while it
+ * runs gets the same promise. After it, registerOnce() registers again, as a
+ * nuxt dev that restarts after a config change needs.
+ *
+ * @param {Function} remove - Removes the target, and returns its promise.
+ *
+ * @returns {Promise<void>} Settles when the target is removed, or the time
+ *   is up.
+ */
+export const removeRegistered = (remove) => {
+  if (process[REMOVING]) return process[REMOVING]
+  if (!process[RUN]) return Promise.resolve()
+  clearInterval(process[TIMER])
+  let timer
+  process[REMOVING] = Promise.race([
+    Promise.resolve(process[RUN]).then(remove),
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, SHUTDOWN_LIMIT)
+    }),
+  ]).then(() => {
+    clearTimeout(timer)
+    for (const key of [RUN, TIMER, REMOVING]) delete process[key]
+  })
+  return process[REMOVING]
+}
+
+/**
  * Removes the target when the process gets SIGINT or SIGTERM.
  *
- * It listens once per process. On a signal, it stops registering, waits for
- * a registration that is still running, and removes the target, for no more
- * than a few seconds in all. Then it sends the signal again, so the process
- * stops as it would have. Nuxt's own close is not
- * a shutdown: nuxt dev closes and starts again after a config change.
+ * It listens once per process. On a signal, it removes the target with
+ * removeRegistered(). Then it sends the signal again, so the process stops as
+ * it would have. A server of the site's own that exits from its own handler
+ * awaits nuxt.close() first, which removes the target too.
  *
  * @param {Function} remove - Removes the target, and returns its promise.
  */
@@ -713,15 +743,7 @@ export const removeOnShutdown = (remove) => {
   if (process[CLEANUP]) return
   const stop = async (signal) => {
     for (const name of SIGNALS) process.removeListener(name, stop)
-    clearInterval(process[TIMER])
-    let timer
-    await Promise.race([
-      Promise.resolve(process[RUN]).then(remove),
-      new Promise((resolve) => {
-        timer = setTimeout(resolve, SHUTDOWN_LIMIT)
-      }),
-    ])
-    clearTimeout(timer)
+    await removeRegistered(remove)
     // The signal goes out again, now that this listener has gone. With no
     // listener left, Node stops the process. signal-exit 3, which nuxt dev
     // loads, stops it only when its own listeners are the only ones, so it

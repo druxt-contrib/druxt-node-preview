@@ -478,9 +478,12 @@ describe('DruxtNodePreview module', () => {
       )
       process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
       const ok = (data) => ({ status: 200, text: JSON.stringify(data) })
+      let last
+      const context = () => last
       const run = async (nuxtOptions) => {
         delete process[KEY]
         delete process[CLEANUP]
+        delete process[Symbol.for('druxt-node-preview.removing')]
         request.mockReset()
         request
           .mockResolvedValueOnce(ok({ access_token: 't' }))
@@ -492,6 +495,7 @@ describe('DruxtNodePreview module', () => {
           },
         })
         Object.assign(context.options, nuxtOptions)
+        last = context
         NuxtModule.call(context)
         await context.hooks.ready()
         clearInterval(process[TIMER])
@@ -525,8 +529,24 @@ describe('DruxtNodePreview module', () => {
           target: { label: 'www.example.com' },
         })
 
+        // A custom server awaits nuxt.close() before it exits, and that
+        // removes the target too.
+        await run({ _start: true })
+        request.mockReset()
+        request
+          .mockResolvedValueOnce(ok({ access_token: 't' }))
+          .mockResolvedValueOnce(ok({ targets: [] }))
+        await context().hooks.close()
+        expect(request.mock.calls[1].slice(0, 2)).toEqual([
+          'DELETE',
+          'https://cms.example.com/api/consumer-node-preview/targets',
+        ])
+        for (const name of signals)
+          process.removeListener(name, process[CLEANUP])
+
         expect(await run({ _build: true })).not.toHaveProperty('expires_in')
         expect(process[CLEANUP]).toBeUndefined()
+        expect(context().hooks.close).toBeUndefined()
       } finally {
         for (const name of signals) {
           process.removeAllListeners(name)

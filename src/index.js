@@ -3,6 +3,7 @@ import {
   registerOnce,
   registerTarget,
   removeOnShutdown,
+  removeRegistered,
   removeTarget,
   resolveBackend,
   resolveRegister,
@@ -269,7 +270,9 @@ const NuxtModule = function (moduleOptions = {}) {
   // modules:done hook, so druxt.baseUrl is known. Nuxt calls ready in dev,
   // start, build and generate, and waits for it, so a build does not exit
   // before the request ends. Each request has a short timeout. With cleanup,
-  // a clean shutdown removes the target.
+  // a clean shutdown removes the target: SIGINT or SIGTERM, or nuxt.close(),
+  // which a server of the site's own awaits before it exits. nuxt dev also
+  // closes when it restarts, and the new copy registers again on ready.
   if (register && this.nuxt) {
     const target = () => ({
       ...register,
@@ -280,8 +283,11 @@ const NuxtModule = function (moduleOptions = {}) {
       path: options.path,
       layouts: pluginOptions.layouts,
     })
+    const remove = () => removeTarget(target())
+    if (register.cleanup)
+      this.nuxt.hook('close', () => removeRegistered(remove))
     this.nuxt.hook('ready', () => {
-      if (register.cleanup) removeOnShutdown(() => removeTarget(target()))
+      if (register.cleanup) removeOnShutdown(remove)
       return registerOnce(() => registerTarget(target()), register.interval)
     })
   }
