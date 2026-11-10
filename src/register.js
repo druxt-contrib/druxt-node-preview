@@ -692,6 +692,11 @@ const PENDING = Symbol.for('druxt-node-preview.register.pending')
  * @returns {Promise<string>} The first run's promise.
  */
 export const registerOnce = (run, interval = HEARTBEAT) => {
+  // A removal still running, such as nuxt dev's close before a restart,
+  // ends first, so its reset can't undo this registration.
+  if (process[REMOVING]) {
+    return process[REMOVING].then(() => registerOnce(run, interval))
+  }
   if (!process[RUN]) {
     // Every registration still running, so a removal can wait for them all.
     const pending = (process[PENDING] = new Set())
@@ -734,10 +739,14 @@ export const removeRegistered = (remove) => {
     new Promise((resolve) => {
       timer = setTimeout(resolve, SHUTDOWN_LIMIT)
     }),
-  ]).then(() => {
-    clearTimeout(timer)
-    for (const key of [RUN, TIMER, PENDING, REMOVING]) delete process[key]
-  })
+  ])
+    // removeTarget() never rejects, but a removal that did must still reset
+    // the state, or the next registration would never run.
+    .catch(() => {})
+    .then(() => {
+      clearTimeout(timer)
+      for (const key of [RUN, TIMER, PENDING, REMOVING]) delete process[key]
+    })
   return process[REMOVING]
 }
 

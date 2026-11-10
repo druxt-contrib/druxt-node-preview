@@ -1108,6 +1108,36 @@ describe('removeRegistered', () => {
     expect(order).toEqual(['run 3', 'run 2', 'removed'])
   })
 
+  test('resets even when the removal rejects', async () => {
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    await expect(
+      removeRegistered(() => Promise.reject(new Error('down')))
+    ).resolves.toBeUndefined()
+    registerOnce(run, 60000)
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('registers after a removal that is still running', async () => {
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    let finish
+    const removing = removeRegistered(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    // nuxt dev's new copy is ready before the old copy's removal ends.
+    const registering = registerOnce(run, 60000)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(run).toHaveBeenCalledTimes(1)
+    finish('removed')
+    await removing
+    await expect(registering).resolves.toBe('registered')
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
   test('removes nothing when nothing registered', async () => {
     const remove = jest.fn()
     await removeRegistered(remove)
