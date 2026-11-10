@@ -16,8 +16,9 @@ that changes, such as a URL.
 ### The Frontend tab stays blank
 
 The frontend refused the frame. Nuxt doesn't send frame headers by default. If
-your host or a module adds `X-Frame-Options` or a `Content-Security-Policy`,
-exempt the preview path, and add Drupal's origin to `frame-ancestors`.
+your host or a module adds `X-Frame-Options`, exempt the preview path from it.
+If it adds a `Content-Security-Policy`, add Drupal's origin to its
+`frame-ancestors` directive, and keep the rest of the policy.
 
 ### The frame stays on `Loading preview...`
 
@@ -46,9 +47,12 @@ target URL uses `[jsonapi_node_preview_path]` or `[jsonapi_node_preview]`.
 ### `Preview request failed with HTTP 404 for ...`
 
 Drupal has no preview of this node for the editor. Check that the editor
-pressed Preview, and that the frontend and Drupal share a parent domain. On
-your own computer, use one host name for both: `localhost` and `127.0.0.1`
-count as different. Then check the CORS settings.
+pressed Preview. A preview that reads with the editor's session also needs
+the frontend and Drupal to share a parent domain and a scheme. On your own
+computer, use one host name for both: `localhost` and `127.0.0.1` count as
+different. A frontend on another domain needs [a
+token](preview-request.md#previews-with-a-token). Then check the CORS
+settings.
 
 ### `Preview request failed with HTTP 400 for ...`
 
@@ -59,10 +63,13 @@ that path by type. See [Options](../README.md#options).
 
 The request reached Drupal without the editor's permissions. With a session,
 check that the editor's role has **View published content**. With a token,
-the token has no scopes. The **Scopes** under **Client Credentials settings**
-do not reach it. Pick a scope under the consumer's **Authorization Code
-settings**, as [Previews with a token](preview-request.md#previews-with-a-token)
-shows. A script that sets the consumer's grant types must keep **Authorization
+the token has no role with that permission. It gets only the roles that both
+its scopes and the editor have. Check that the consumer has a scope under
+**Authorization Code settings**, as [Previews with a
+token](preview-request.md#previews-with-a-token) shows. The **Scopes** under
+**Client Credentials settings** do not reach the token. Then check that the
+scope's role has **View published content**, and that the editor has the
+role. A script that sets the consumer's grant types must keep **Authorization
 Code**, or the token is empty.
 
 ### `Preview request failed with HTTP 401 for ...`
@@ -165,7 +172,9 @@ Drupal was too slow. Raise the `timeout` in Nuxt's `axios` option.
 #### `Drupal redirected ... Set druxt.baseUrl to the URL Drupal redirects to.`
 
 Drupal sent the request to another URL, such as from `http` to `https`. Set
-`druxt.baseUrl` to the URL in the message. With a `backend`, the message ends
+`druxt.baseUrl` to the site's base URL from the message, without the endpoint
+path. For `https://cms.example.com/oauth/token`, that is
+`https://cms.example.com`. With a `backend`, the message ends
 "Set the register backend to the URL Drupal redirects to." Then set the
 `backend` instead.
 

@@ -81,9 +81,9 @@ that [Paths and full URLs](preview-request.md#paths-and-full-urls) describes.
 The module registers when each Nuxt process starts, then every `interval`
 while it runs, 6 hours by default. Consumer Node Preview moves a target that
 stops registering to its Inactive group, after a day by default, and later
-deletes it. Its **Preview** tab sets both limits. Keep `interval` shorter than
-the Inactive limit, so a target stays active through a failed
-attempt or two. A static site
+deletes it. Its **Preview** tab sets both limits. Keep `interval` under half
+the Inactive limit, so a target stays active through a failed attempt, or
+under a third of it for two, with a margin for how long a request takes. A static site
 only registers when it builds, so its target goes inactive unless it builds
 again in time. An inactive target can still be picked.
 
@@ -141,7 +141,8 @@ mistake. By default the target reads with a token, because a path would name
 the wrong site. The module also accepts previews from the `backend` origin, so
 editors must open that Drupal site at exactly that origin: the same scheme,
 host and port. A preview from any other origin is refused. The page fetches
-from the `backend` with `window.fetch`, as [The preview
+from the `backend` with `window.fetch`, unless the `backend` shares an origin
+with the page or `druxt.baseUrl`, as [The preview
 request](preview-request.md#the-druxt-client-and-windowfetch) says. Nuxt
 writes the backend into the page when it builds, so set it for the build as
 well as for `nuxt start`. Only registration needs the secret.

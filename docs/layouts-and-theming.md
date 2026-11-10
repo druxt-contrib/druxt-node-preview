@@ -94,13 +94,15 @@ preview:
 
 ```js
 const preview = this.$store.state.druxtNodePreview || {}
-if (preview.active && inPreview) {
+const stored = this.$store.state.druxt.resources[type] || {}
+if (preview.active && stored[id]) {
   // Read the resource from the Druxt store here.
   return
 }
 ```
 
-Here `inPreview` is true when the preview document has the resource. A
+Here `type` and `id` are the resource's JSON:API type and UUID. During a
+preview, the Druxt store holds every resource in the preview document. A
 resource the document lacks still needs its fetch. The store has only what
 the document includes, so add deeper paths to the `include` option.
 

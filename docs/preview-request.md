@@ -69,9 +69,10 @@ preview with the editor's session.
 
 As soon as the page starts, it takes the token out of its address and its
 route. So an error tracker, session recorder or analytics page view on the
-page doesn't log it. The page keeps the token for 15 minutes at most, in the
-tab's session storage where the browser allows it, so a reload of the frame
-still previews. It forgets the token when the editor leaves the preview. After
+page doesn't log it. The page keeps the token in the tab's session storage
+where the browser allows it, so a reload of the frame still previews. It uses
+a kept token for 15 minutes at most. It removes the token when the editor
+leaves the preview, or when it next reads it after those 15 minutes. After
 that, a reload needs a fresh preview from Drupal.
 
 A script that runs before the page's plugins, such as one in the page head,
@@ -106,13 +107,21 @@ The token acts for the editor, with the permissions of the scopes in the
 consumer's **Authorization Code settings**. It gets only the roles that both
 the scope and the editor have. So give the scope a role made for previews,
 rather than your editors' own role. Then a token that leaks can read previews,
-and nothing else the editors can do.
+and nothing else the editors can do, as long as JSON:API accepts only reads.
+The role's create and edit permissions let the token write through JSON:API
+on a site that allows writes. Keep **Allowed operations** on **Accept only
+JSON:API read operations**, the default, at **Administration > Configuration >
+Web services > JSON:API**.
 
 1. Add a role, such as Previewer, with only what previews need. That is
    **View published content**, and the create and edit permissions for each content
    type editors preview, because Drupal lets only an editor who can create or
    edit a node preview it. Add **View own unpublished content** for drafts, and **View
-   media** if previews show media. Give the role to your editors.
+   media** if previews show media. Give the role to your editors. If
+   editors have different create and edit permissions by content type, add a
+   role for each group of editors instead, with only that group's
+   permissions, so no editor gains one. Give each role its own scope in step
+   2, and pick them all in step 4.
 2. Add a scope at
    **Administration > Configuration > People > Simple OAuth > Scopes**. Turn
    on its **Authorization Code** grant type.
@@ -128,8 +137,8 @@ and nothing else the editors can do.
 
 Keep the token's lifetime short, on Consumer Node Preview's **Preview** tab.
 It is 15 minutes by default, and anyone who has the token can use it until
-then. The page still keeps a token 15 minutes at most, so a longer lifetime
-doesn't let a reload of the frame preview for longer.
+then. The page still uses a token for 15 minutes at most, so a longer
+lifetime doesn't let a reload of the frame preview for longer.
 
 The **Scopes** under **Client Credentials settings** do not reach the token.
 A token without an Authorization Code scope fails with HTTP 403. See
