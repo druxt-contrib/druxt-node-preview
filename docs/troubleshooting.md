@@ -230,7 +230,7 @@ or environment variable to fix:
 The module reads the secret only from the environment. Take it out of
 `nuxt.config.js`. If it reached the repository, change the consumer's secret.
 
-### `Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, at least 60000.`
+### `Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, from 60000 to 2147483647.`
 
 The module registers every 6 hours instead. Set a whole number, such as
 `3600000` for an hour.
