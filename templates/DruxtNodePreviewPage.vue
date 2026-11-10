@@ -25,6 +25,24 @@
 import DruxtNodePreview from './druxt-node-preview.vue'
 
 /**
+ * Adds a directive to a response header, and keeps the ones the site set.
+ *
+ * @param {object} res - The server response.
+ * @param {string} name - The header, such as Cache-Control.
+ * @param {string} directive - The directive to add, such as no-store.
+ */
+const addDirective = (res, name, directive) => {
+  const existing = res.getHeader ? res.getHeader(name) : undefined
+  const directives = [existing]
+    .flat()
+    .flatMap((value) => String(value || '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+  if (!directives.includes(directive)) directives.push(directive)
+  res.setHeader(name, directives.join(', '))
+}
+
+/**
  * Renders a Drupal node preview.
  *
  * This page only works in the browser. The preview endpoint arrives in the
@@ -46,10 +64,34 @@ export default {
   layout: ({ $druxtNodePreview, route }) =>
     $druxtNodePreview.layout(route.query.layout),
 
+  /**
+   * Tells caches and search engines to keep nothing of this page.
+   *
+   * Each preview is one editor's unsaved draft, so a page cache, CDN or proxy
+   * must not store the server render. The headers go on the render's own
+   * response, where a page cache in front of Nuxt can see them.
+   *
+   * @param {object} context - The Nuxt context. It has `res` only on the server.
+   */
+  middleware({ res }) {
+    if (!res || res.headersSent) return
+    addDirective(res, 'Cache-Control', 'no-store')
+    addDirective(res, 'X-Robots-Tag', 'noindex')
+  },
+
   data: () => ({
     document: null,
     entity: null,
     error: null,
+  }),
+
+  // A generated site writes this page out as a file, with no headers. The
+  // tag asks search engines not to index it there too. It has its own key, so
+  // a robots tag the site sets stays in the page as well.
+  head: () => ({
+    meta: [
+      { hid: 'druxt-node-preview-robots', name: 'robots', content: 'noindex' },
+    ],
   }),
 
   computed: {

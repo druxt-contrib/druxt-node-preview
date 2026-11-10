@@ -105,3 +105,24 @@ editor's session.
 The page only works in the browser. A server render shows "Loading
 preview..." and the browser fills it in. A statically generated page has the
 default layout, so the page switches to the listed layout in the browser.
+
+Each preview is one editor's unsaved draft, so the preview page's server
+render adds `no-store` to any `Cache-Control` directives the site has set,
+and `noindex` to any `X-Robots-Tag` directives. A page cache, CDN or proxy in front
+of Nuxt then doesn't store the page, and search engines don't index it. The
+headers cover the page only. The preview itself comes from Drupal in a request
+of its own, with Drupal's cache headers. The headers come from the page's
+middleware, so they need Nuxt's page middleware on, as it is by default.
+
+On a statically generated site, files have no headers, so the page has a
+`<meta name="robots" content="noindex">` tag instead, beside any robots tag of
+the site's own. Give the preview path a host rule as well, sending
+`Cache-Control: no-store` and `X-Robots-Tag: noindex`, because a single-page
+app's first HTML doesn't have the tag yet.
+
+A cache that stored the preview page before this change keeps that copy until
+it expires. Purge it once after upgrading, or the frame can stay on "Loading
+preview..." when that copy's script files are gone. An editor's browser can
+hold an old copy too. If the frame still stays on "Loading preview...", the
+editor clears the browser's cache for the frontend and opens the preview from
+Drupal again.

@@ -128,6 +128,14 @@ test.describe('druxt frontend', () => {
   // more than the default expect timeout, before the frame has any content.
   const frameExpect = expect.configure({ timeout: 30000 })
 
+  test('the preview route tells caches and search engines to keep nothing', async ({
+    page,
+  }) => {
+    const response = await page.request.get(`${DRUXT}/druxt/node/preview`)
+    expect(response.headers()['cache-control']).toBe('no-store')
+    expect(response.headers()['x-robots-tag']).toBe('noindex')
+  })
+
   test('renders the unsaved paragraphs through DruxtEntity', async ({
     page,
   }) => {

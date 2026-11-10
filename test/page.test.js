@@ -30,6 +30,64 @@ describe('DruxtNodePreviewPage', () => {
     jest.restoreAllMocks()
   })
 
+  test('the server render tells caches and search engines to keep nothing', () => {
+    const res = { headersSent: false, setHeader: jest.fn() }
+    Page.middleware({ res })
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store')
+    expect(res.setHeader).toHaveBeenCalledWith('X-Robots-Tag', 'noindex')
+
+    // In the browser, and once the headers are sent, there is nothing to set.
+    expect(() => Page.middleware({})).not.toThrow()
+    const sent = { headersSent: true, setHeader: jest.fn() }
+    Page.middleware({ res: sent })
+    expect(sent.setHeader).not.toHaveBeenCalled()
+  })
+
+  test('the server render keeps cache directives it already has', () => {
+    const headers = { 'cache-control': 'no-transform, max-age=60' }
+    const res = {
+      headersSent: false,
+      getHeader: (name) => headers[name.toLowerCase()],
+      setHeader: jest.fn(),
+    }
+    Page.middleware({ res })
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'no-transform, max-age=60, no-store'
+    )
+  })
+
+  test('the server render keeps robots directives it already has', () => {
+    const headers = { 'x-robots-tag': 'nofollow, nosnippet' }
+    const res = {
+      headersSent: false,
+      getHeader: (name) => headers[name.toLowerCase()],
+      setHeader: jest.fn(),
+    }
+    Page.middleware({ res })
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'X-Robots-Tag',
+      'nofollow, nosnippet, noindex'
+    )
+
+    headers['x-robots-tag'] = ['noindex', 'nofollow']
+    res.setHeader.mockClear()
+    Page.middleware({ res })
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'X-Robots-Tag',
+      'noindex, nofollow'
+    )
+  })
+
+  test('a generated page asks search engines not to index it', () => {
+    // Its own key, so a site's robots tag stays in the page too.
+    expect(Page.head().meta).toContainEqual({
+      hid: 'druxt-node-preview-robots',
+      name: 'robots',
+      content: 'noindex',
+    })
+  })
+
   test('the layout hook asks the plugin about ?layout=', () => {
     const preview = { layout: jest.fn(() => 'bare') }
     expect(
