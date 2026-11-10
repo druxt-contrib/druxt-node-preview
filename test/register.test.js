@@ -163,6 +163,10 @@ describe('resolveRegister', () => {
 
   test('takes the interval from the options or the environment', () => {
     expect(resolveRegister({ interval: 600000 }, ENV).interval).toBe(600000)
+    // Node's timers stop at this, the largest 32-bit signed integer.
+    expect(resolveRegister({ interval: 2147483647 }, ENV).interval).toBe(
+      2147483647
+    )
     expect(
       resolveRegister(
         { interval: 600000 },
@@ -172,18 +176,18 @@ describe('resolveRegister', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 
-  test.each([[59999], [1.5], ['600000'], [-60000], [Infinity]])(
+  test.each([[59999], [1.5], ['600000'], [-60000], [Infinity], [2147483648]])(
     'the interval %j is ignored with a warning',
     (interval) => {
       const register = resolveRegister({ interval }, ENV)
       expect(register.interval).toBe(HEARTBEAT)
       expect(warn.mock.calls[0][0]).toBe(
-        '[druxt-node-preview] Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, at least 60000.'
+        '[druxt-node-preview] Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, from 60000 to 2147483647.'
       )
     }
   )
 
-  test.each([['10m'], ['600000.5'], ['1e6'], ['59999']])(
+  test.each([['10m'], ['600000.5'], ['1e6'], ['59999'], ['2147483648']])(
     'the interval %j from the environment is ignored with a warning',
     (value) => {
       const env = { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_INTERVAL: value }

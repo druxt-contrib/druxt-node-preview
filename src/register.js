@@ -29,6 +29,9 @@ export const HEARTBEAT = 6 * 60 * 60 * 1000
 
 // The shortest time between registrations, in milliseconds.
 const MIN_INTERVAL = 60 * 1000
+// Node's timers take at most this, the largest 32-bit signed integer. A larger
+// delay runs the timer every millisecond instead.
+const MAX_INTERVAL = 2147483647
 
 const warn = (message) => console.warn(PREFIX + message)
 const info = (message) => console.info(PREFIX + message)
@@ -191,11 +194,15 @@ export const resolveRegister = (value, env) => {
         : NaN
   let interval = HEARTBEAT
   if (rawInterval !== undefined) {
-    if (Number.isInteger(rawInterval) && rawInterval >= MIN_INTERVAL) {
+    if (
+      Number.isInteger(rawInterval) &&
+      rawInterval >= MIN_INTERVAL &&
+      rawInterval <= MAX_INTERVAL
+    ) {
       interval = rawInterval
     } else {
       warn(
-        `Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, at least ${MIN_INTERVAL}.`
+        `Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, from ${MIN_INTERVAL} to ${MAX_INTERVAL}.`
       )
     }
   }
