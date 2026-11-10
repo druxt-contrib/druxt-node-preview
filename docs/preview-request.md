@@ -105,13 +105,20 @@ site"](https://git.drupalcode.org/project/consumer_node_preview/-/blob/1.0.x/REA
 
 The token acts for the editor, with the permissions of the scopes in the
 consumer's **Authorization Code settings**. It gets only the roles that both
-the scope and the editor have. So give the scope a role made for previews,
-rather than your editors' own role. Then a token that leaks can read previews,
-and nothing else the editors can do, as long as JSON:API accepts only reads.
-The role's create and edit permissions let the token write through JSON:API
-on a site that allows writes. Keep **Allowed operations** on **Accept only
-JSON:API read operations**, the default, at **Administration > Configuration >
-Web services > JSON:API**.
+the scope and the editor have, and Simple OAuth always adds **Authenticated
+user**. So give the scope a role made for previews, rather than your editors'
+own role, and keep **Authenticated user** to what every user may do.
+
+Until it expires, a token that leaks has the permissions of that role and
+**Authenticated user**. Over JSON:API that's more than
+previews: it can read published content, media, and with **View own
+unpublished content**, the editor's other drafts. The role's create and edit
+permissions also let it write, on a site that allows JSON:API writes. So keep
+**Allowed operations** on **Accept only JSON:API read operations**, the
+default, at **Administration > Configuration > Web services > JSON:API**.
+
+A scope doesn't limit user 1. Drupal gives user 1 every permission, so a
+token for user 1 has them all too. Preview with editor accounts, not user 1.
 
 1. Add a role, such as Previewer, with only what previews need. That is
    **View published content**, and the create and edit permissions for each content

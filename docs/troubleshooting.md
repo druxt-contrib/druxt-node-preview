@@ -18,14 +18,21 @@ that changes, such as a URL.
 The frontend refused the frame. Nuxt doesn't send frame headers by default. If
 your host or a module adds `X-Frame-Options`, exempt the preview path from it.
 If it adds a `Content-Security-Policy`, add Drupal's origin to its
-`frame-ancestors` directive, and keep the rest of the policy.
+`frame-ancestors` directive, and keep the rest of the policy. Without one,
+send `Content-Security-Policy: frame-ancestors 'self' https://cms.example.com`
+on the preview path, with Drupal's origin, so other sites still can't frame
+it.
 
 ### The frame stays on `Loading preview...`
 
-The page's script did not start. A page cache, CDN or proxy can hold an old
-copy of the page whose script files are gone. Purge that copy. The editor's
-browser can hold one too. Clear the browser's cache for the frontend, then
-press Preview in Drupal again.
+The page shows this until the preview arrives, so either its script did not
+start, or the preview request has not answered. Open the browser's network
+panel in the frame. A request to the preview endpoint that stays pending
+means Drupal or the network is slow. With no such request, the script did not
+start: a page cache, CDN or proxy can hold an old copy of the page whose
+script files are gone. Purge that copy. The editor's browser can hold one too.
+Clear the browser's cache for the frontend, then press Preview in Drupal
+again.
 
 ### `The URL fragment has no preview endpoint.`
 
@@ -48,9 +55,11 @@ target URL uses `[jsonapi_node_preview_path]` or `[jsonapi_node_preview]`.
 
 Drupal has no preview of this node for the editor. Check that the editor
 pressed Preview. A preview that reads with the editor's session also needs
-the frontend and Drupal to share a parent domain and a scheme. On your own
-computer, use one host name for both: `localhost` and `127.0.0.1` count as
-different. A frontend on another domain needs [a
+the frontend and Drupal to share a parent domain and a scheme, or a proxy on
+the frontend's origin that the editor signs in through. See [Paths and full
+URLs](preview-request.md#paths-and-full-urls). On your own computer, use one
+host name for both: `localhost` and `127.0.0.1` count as different. Otherwise,
+a frontend on another domain needs [a
 token](preview-request.md#previews-with-a-token). Then check the CORS
 settings.
 

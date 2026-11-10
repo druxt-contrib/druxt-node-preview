@@ -94,17 +94,19 @@ preview:
 
 ```js
 const preview = this.$store.state.druxtNodePreview || {}
-const stored = this.$store.state.druxt.resources[type] || {}
-if (preview.active && stored[id]) {
+if (preview.active && this.$druxtNodePreview.has(type, id)) {
   // Read the resource from the Druxt store here.
   return
 }
 ```
 
-Here `type` and `id` are the resource's JSON:API type and UUID. During a
-preview, the Druxt store holds every resource in the preview document. A
-resource the document lacks still needs its fetch. The store has only what
-the document includes, so add deeper paths to the `include` option.
+Here `type` and `id` are the resource's JSON:API type and UUID.
+`$druxtNodePreview.has()` is true only for a resource in the preview
+document. A saved copy of the resource, or one in another language, may be in
+the store too, so finding it there proves nothing. The preview stores its
+resources under the route's language, as `DruxtEntity` reads them. A resource
+the document lacks still needs its fetch, so add deeper paths to the
+`include` option.
 
 The store has two values. `active` is true while a preview is in the store.
 `uuid` is the previewed node's UUID then, and `null` otherwise. A component
