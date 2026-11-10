@@ -413,14 +413,22 @@ describe('$druxtNodePreview plugin', () => {
     expect(window.fetch).toHaveBeenCalled()
   })
 
-  test('fetch without the Druxt client keeps a path endpoint relative', async () => {
+  test('fetch without the Druxt client sends a path to the page origin it checked', async () => {
     const { injected } = buildPlugin()
     window.fetch = jest
       .fn()
       .mockResolvedValue(jsonApi({ data: { type: 'node--article', id: UUID } }))
-    await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    // A base element for another origin must not move the request there.
+    const base = document.createElement('base')
+    base.href = 'https://elsewhere.example/'
+    document.head.appendChild(base)
+    try {
+      await injected.value.fetch(`/jsonapi/node/article/${UUID}/preview`)
+    } finally {
+      base.remove()
+    }
     expect(window.fetch.mock.calls[0][0]).toBe(
-      `/jsonapi/node/article/${UUID}/preview?include=field_body`
+      `${window.location.origin}/jsonapi/node/article/${UUID}/preview?include=field_body`
     )
   })
 

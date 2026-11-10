@@ -563,10 +563,15 @@ export default ({ app, store }, inject) => {
       }
       let response
       try {
-        response = await window.fetch(url, {
-          credentials: token ? 'omit' : 'include',
-          headers,
-        })
+        // A path resolves against the page's origin, which checkEndpoint()
+        // checked. window.fetch would resolve it against a base element.
+        response = await window.fetch(
+          new URL(url, window.location.origin).href,
+          {
+            credentials: token ? 'omit' : 'include',
+            headers,
+          }
+        )
       } catch (error) {
         if (renew) throw new Error(EXPIRED)
         throw error
