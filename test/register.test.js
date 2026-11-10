@@ -918,10 +918,14 @@ describe('removeOnShutdown', () => {
 
   test('on a signal, stops registering, removes the target, then stops', async () => {
     alone()
+    // On the fake clock from the start, so the interval is one it controls.
+    jest.useFakeTimers()
     const run = jest.fn().mockResolvedValue('registered')
     const remove = jest.fn().mockResolvedValue('removed')
     registerOnce(run, 60000)
     removeOnShutdown(remove)
+    jest.advanceTimersByTime(60000)
+    expect(run).toHaveBeenCalledTimes(2)
 
     await process[CLEANUP]('SIGTERM')
 
@@ -930,9 +934,8 @@ describe('removeOnShutdown', () => {
     expect(process.listenerCount('SIGINT')).toBe(0)
     expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
     // No registration after the removal.
-    jest.useFakeTimers()
     jest.advanceTimersByTime(120000)
-    expect(run).toHaveBeenCalledTimes(1)
+    expect(run).toHaveBeenCalledTimes(2)
   })
 
   test('removes only after a registration that is still running', async () => {
@@ -998,7 +1001,11 @@ describe('removeOnShutdown', () => {
     jest.useFakeTimers()
     removeOnShutdown(() => new Promise(() => {}))
     const stopping = process[CLEANUP]('SIGTERM')
-    jest.advanceTimersByTime(8000)
+    jest.advanceTimersByTime(7999)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(kill).not.toHaveBeenCalled()
+    jest.advanceTimersByTime(1)
     await stopping
     expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
   })

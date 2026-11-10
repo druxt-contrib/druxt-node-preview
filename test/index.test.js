@@ -498,7 +498,10 @@ describe('DruxtNodePreview module', () => {
         return JSON.parse(request.mock.calls[1][2].body).target
       }
       try {
-        // Twice the 6 hour interval, in seconds.
+        // Twice the 6 hour interval, in seconds, for nuxt dev and nuxt start.
+        expect((await run({ dev: true, _build: true })).expires_in).toBe(43200)
+        for (const name of signals)
+          process.removeListener(name, process[CLEANUP])
         expect((await run({ _start: true })).expires_in).toBe(43200)
         expect(process[CLEANUP]).toEqual(expect.any(Function))
         expect(process.listeners('SIGTERM')).toContain(process[CLEANUP])

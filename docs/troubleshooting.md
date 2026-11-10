@@ -272,7 +272,12 @@ The module uses its default instead: it removes the target when `nuxt dev` or
 The server stopped, and the DELETE that removes its target failed. The target
 stays until it expires, or until Drupal's own limits remove it. The rest of
 the message is as for [`Could not register the preview
-target`](#could-not-register-the-preview-target-), with one more case:
+target`](#could-not-register-the-preview-target-), with two more cases:
+
+#### `.../api/consumer-node-preview/targets answered HTTP 422 ... Check the register label.`
+
+Drupal refused the label in the DELETE. Check the `label` option, or the
+frontend's host that the module uses without one.
 
 #### `.../api/consumer-node-preview/targets answered HTTP 405. This version of Consumer Node Preview cannot remove a target, so the target stays until Drupal deletes it. Update Consumer Node Preview.`
 
