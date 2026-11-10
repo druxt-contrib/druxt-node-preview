@@ -675,9 +675,11 @@ export const removeTarget = async (settings) => {
 // The registration's state lives on the process. See registerOnce().
 const RUN = Symbol.for('druxt-node-preview.register')
 const TIMER = Symbol.for('druxt-node-preview.register.timer')
-const CLEANUP = Symbol.for('druxt-node-preview.cleanup')
-const REMOVING = Symbol.for('druxt-node-preview.removing')
 const PENDING = Symbol.for('druxt-node-preview.register.pending')
+const CLEANUP = Symbol.for('druxt-node-preview.cleanup')
+const REMOVE = Symbol.for('druxt-node-preview.cleanup.remove')
+const REMOVING = Symbol.for('druxt-node-preview.removing')
+const ATTEMPT = Symbol.for('druxt-node-preview.removing.attempt')
 
 /**
  * Starts the registration once per process, and repeats it on an interval.
@@ -692,10 +694,10 @@ const PENDING = Symbol.for('druxt-node-preview.register.pending')
  * @returns {Promise<string>} The first run's promise.
  */
 export const registerOnce = (run, interval = HEARTBEAT) => {
-  // A removal still running, such as nuxt dev's close before a restart,
-  // ends first, so its reset can't undo this registration.
-  if (process[REMOVING]) {
-    return process[REMOVING].then(() => registerOnce(run, interval))
+  // A removal still under way, such as nuxt dev's close before a restart,
+  // ends first, DELETE and all, so it can't remove this registration.
+  if (process[ATTEMPT]) {
+    return process[ATTEMPT].then(() => registerOnce(run, interval))
   }
   if (!process[RUN]) {
     // Every registration still running, so a removal can wait for them all.
@@ -703,7 +705,8 @@ export const registerOnce = (run, interval = HEARTBEAT) => {
     const tracked = () => {
       const registration = Promise.resolve(run())
       pending.add(registration)
-      registration.finally(() => pending.delete(registration))
+      const done = () => pending.delete(registration)
+      registration.then(done, done)
       return registration
     }
     process[RUN] = tracked()
@@ -717,10 +720,11 @@ export const registerOnce = (run, interval = HEARTBEAT) => {
  * Stops registering and removes the target, once.
  *
  * It waits for every registration that is still running, the first and
- * any repeat, so no PATCH lands after the DELETE. It gives up after a few
- * seconds in all. A second call while it
- * runs gets the same promise. After it, registerOnce() registers again, as a
- * nuxt dev that restarts after a config change needs.
+ * any repeat, so no PATCH lands after the DELETE. Its promise settles after
+ * a few seconds at most, so a shutdown never waits long. A second call while
+ * it runs gets the same promise. Once the DELETE itself has ended,
+ * registerOnce() registers again, as a nuxt dev that restarts after a config
+ * change needs.
  *
  * @param {Function} remove - Removes the target, and returns its promise.
  *
@@ -731,40 +735,49 @@ export const removeRegistered = (remove) => {
   if (process[REMOVING]) return process[REMOVING]
   if (!process[RUN]) return Promise.resolve()
   clearInterval(process[TIMER])
+  // removeTarget() never rejects, but a removal that did must still end, or
+  // the next registration would never run.
+  const attempt = Promise.allSettled([
+    process[RUN],
+    ...(process[PENDING] || []),
+  ])
+    .then(remove)
+    .catch(() => {})
+    .then(() => {
+      for (const key of [RUN, TIMER, PENDING, REMOVING, ATTEMPT]) {
+        delete process[key]
+      }
+    })
+  process[ATTEMPT] = attempt
   let timer
   process[REMOVING] = Promise.race([
-    Promise.allSettled([process[RUN], ...(process[PENDING] || [])]).then(
-      remove
-    ),
+    attempt,
     new Promise((resolve) => {
       timer = setTimeout(resolve, SHUTDOWN_LIMIT)
     }),
-  ])
-    // removeTarget() never rejects, but a removal that did must still reset
-    // the state, or the next registration would never run.
-    .catch(() => {})
-    .then(() => {
-      clearTimeout(timer)
-      for (const key of [RUN, TIMER, PENDING, REMOVING]) delete process[key]
-    })
+  ]).then(() => clearTimeout(timer))
   return process[REMOVING]
 }
 
 /**
  * Removes the target when the process gets SIGINT or SIGTERM.
  *
- * It listens once per process. On a signal, it removes the target with
- * removeRegistered(). Then it sends the signal again, so the process stops as
- * it would have. A server of the site's own that exits from its own handler
- * awaits nuxt.close() first, which removes the target too.
+ * It listens once per process, and removes with the latest copy's remove,
+ * so a nuxt dev that restarted uses its new settings. A copy with cleanup
+ * off passes null, and nothing is removed. On a signal, it removes the
+ * target with removeRegistered(). Then it sends the signal again, so the
+ * process stops as it would have. A server of the site's own that exits from
+ * its own handler awaits nuxt.close() first, which removes the target too.
  *
- * @param {Function} remove - Removes the target, and returns its promise.
+ * @param {Function|null} remove - Removes the target, and returns its
+ *   promise, or null for no removal.
  */
 export const removeOnShutdown = (remove) => {
-  if (process[CLEANUP]) return
+  process[REMOVE] = remove
+  if (process[CLEANUP] || !remove) return
   const stop = async (signal) => {
     for (const name of SIGNALS) process.removeListener(name, stop)
-    await removeRegistered(remove)
+    if (process[REMOVE]) await removeRegistered(process[REMOVE])
     // The signal goes out again, now that this listener has gone. With no
     // listener left, Node stops the process. signal-exit 3, which nuxt dev
     // loads, stops it only when its own listeners are the only ones, so it

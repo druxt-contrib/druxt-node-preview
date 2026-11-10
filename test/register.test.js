@@ -888,6 +888,8 @@ describe('removeOnShutdown', () => {
     delete process[RUN]
     delete process[CLEANUP]
     delete process[Symbol.for('druxt-node-preview.removing')]
+    delete process[Symbol.for('druxt-node-preview.removing.attempt')]
+    delete process[Symbol.for('druxt-node-preview.cleanup.remove')]
     listeners = {
       SIGINT: process.listeners('SIGINT'),
       SIGTERM: process.listeners('SIGTERM'),
@@ -903,6 +905,8 @@ describe('removeOnShutdown', () => {
     delete process[RUN]
     delete process[CLEANUP]
     delete process[Symbol.for('druxt-node-preview.removing')]
+    delete process[Symbol.for('druxt-node-preview.removing.attempt')]
+    delete process[Symbol.for('druxt-node-preview.cleanup.remove')]
     kill.mockRestore()
     jest.useRealTimers()
   })
@@ -911,6 +915,29 @@ describe('removeOnShutdown', () => {
   const alone = () => {
     for (const name of ['SIGINT', 'SIGTERM']) process.removeAllListeners(name)
   }
+
+  test("removes with the latest copy's settings, after a restart", async () => {
+    alone()
+    registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+    const first = jest.fn().mockResolvedValue('removed')
+    const second = jest.fn().mockResolvedValue('removed')
+    removeOnShutdown(first)
+    removeOnShutdown(second)
+    await process[CLEANUP]('SIGTERM')
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  test('removes nothing once a later copy turns cleanup off', async () => {
+    alone()
+    registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+    const remove = jest.fn().mockResolvedValue('removed')
+    removeOnShutdown(remove)
+    removeOnShutdown(null)
+    await process[CLEANUP]('SIGTERM')
+    expect(remove).not.toHaveBeenCalled()
+    expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
+  })
 
   test('listens once per process', () => {
     alone()
@@ -1026,6 +1053,8 @@ describe('removeRegistered', () => {
   const reset = () => {
     clearInterval(process[TIMER])
     for (const key of [RUN, TIMER, PENDING, REMOVING]) delete process[key]
+    delete process[Symbol.for('druxt-node-preview.removing.attempt')]
+    delete process[Symbol.for('druxt-node-preview.cleanup.remove')]
   }
   beforeEach(reset)
   afterEach(() => {
@@ -1136,6 +1165,46 @@ describe('removeRegistered', () => {
     await removing
     await expect(registering).resolves.toBe('registered')
     expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('registers only after a removal that outlasts the time limit ends', async () => {
+    jest.useFakeTimers()
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    let finish
+    const removing = removeRegistered(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    // The removal's caller gets its answer at the limit.
+    await Promise.resolve()
+    await Promise.resolve()
+    jest.advanceTimersByTime(8000)
+    await removing
+    // A restart's ready hook then waits for the DELETE still on its way.
+    const registering = registerOnce(run, 60000)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(run).toHaveBeenCalledTimes(1)
+    finish('removed')
+    await registering
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('a registration that rejects leaves nothing unhandled', async () => {
+    const unhandled = jest.fn()
+    process.on('unhandledRejection', unhandled)
+    try {
+      await expect(
+        registerOnce(() => Promise.reject(new Error('down')), 60000)
+      ).rejects.toThrow('down')
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(unhandled).not.toHaveBeenCalled()
+    } finally {
+      process.removeListener('unhandledRejection', unhandled)
+    }
   })
 
   test('removes nothing when nothing registered', async () => {

@@ -484,6 +484,7 @@ describe('DruxtNodePreview module', () => {
         delete process[KEY]
         delete process[CLEANUP]
         delete process[Symbol.for('druxt-node-preview.removing')]
+        delete process[Symbol.for('druxt-node-preview.removing.attempt')]
         request.mockReset()
         request
           .mockResolvedValueOnce(ok({ access_token: 't' }))

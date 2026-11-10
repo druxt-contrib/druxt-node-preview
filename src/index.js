@@ -287,7 +287,8 @@ const NuxtModule = function (moduleOptions = {}) {
     if (register.cleanup)
       this.nuxt.hook('close', () => removeRegistered(remove))
     this.nuxt.hook('ready', () => {
-      if (register.cleanup) removeOnShutdown(remove)
+      // A restarted nuxt dev's settings replace the last copy's.
+      removeOnShutdown(register.cleanup ? remove : null)
       return registerOnce(() => registerTarget(target()), register.interval)
     })
   }
