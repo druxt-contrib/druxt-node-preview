@@ -253,6 +253,38 @@ The module reads the secret only from the environment. Take it out of
 The module registers every 6 hours instead. Set a whole number, such as
 `3600000` for an hour.
 
+### `Ignored DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN or register.expiresIn. Use 0 for no expiry, or a whole number of milliseconds above the interval, ...`
+
+The expiry must be longer than the time to the next registration, or the
+target would leave the picker while the frontend still runs. The module uses
+its default instead: twice `interval` for `nuxt dev` and `nuxt start`, and no
+expiry for a build. Set a whole number above `interval`, or `0` for none. See
+[Expiry and shutdown](registration.md#expiry-and-shutdown).
+
+### `Ignored DRUXT_NODE_PREVIEW_REGISTER_CLEANUP or register.cleanup. Use true or false.`
+
+The module uses its default instead: it removes the target when `nuxt dev` or
+`nuxt start` stops, and not after a build. Set `true` or `false`, or `1` or
+`0` in the environment.
+
+### `Could not remove the preview target: ...`
+
+The server stopped, and the DELETE that removes its target failed. The target
+stays until it expires, or until Drupal's own limits remove it. The rest of
+the message is as for [`Could not register the preview
+target`](#could-not-register-the-preview-target-), with two more cases:
+
+#### `.../api/consumer-node-preview/targets answered HTTP 422 ... Check the register label.`
+
+Drupal refused the label in the DELETE. Check the `label` option, or the
+frontend's host that the module uses without one.
+
+#### `.../api/consumer-node-preview/targets answered HTTP 405. This version of Consumer Node Preview cannot remove a target, so the target stays until Drupal deletes it. Update Consumer Node Preview.`
+
+The site's Consumer Node Preview has no DELETE method, and ignores the
+expiry too. Update it to a version with target expiry. Until then, set
+`cleanup` to `false` to stop the warning.
+
 ### `druxt.baseUrl uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
 
 Registration still runs. Use `https` for any Drupal site that is not on your

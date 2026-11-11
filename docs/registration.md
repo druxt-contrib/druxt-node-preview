@@ -30,16 +30,18 @@ DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' npm run start
 A shell keeps typed commands in its history. On a shared machine, set the
 secret in the host's environment settings or a secrets manager instead.
 
-| Option     | Environment variable                   | Default                                      | Description                                                                                                                                                |
-| ---------- | -------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `url`      | `DRUXT_NODE_PREVIEW_URL`               | None                                         | The frontend's public URL, such as `https://www.example.com`. Nuxt cannot know it from a build. Add the router base, if the site has one.                  |
-| `consumer` | `DRUXT_NODE_PREVIEW_CLIENT_ID`         | None                                         | The client ID of the consumer to register on.                                                                                                              |
-| None       | `DRUXT_NODE_PREVIEW_CLIENT_SECRET`     | None                                         | The consumer's secret.                                                                                                                                     |
-| `label`    | None                                   | The host of `url`, such as `www.example.com` | The target's name in Drupal's Frontend picker.                                                                                                             |
-| `token`    | `DRUXT_NODE_PREVIEW_REGISTER_TOKEN`    | `true` with `backend`, otherwise `false`     | Registers a target that reads the preview with a token. See [Previews with a token](preview-request.md#previews-with-a-token).                             |
-| `backend`  | `DRUXT_NODE_PREVIEW_REGISTER_BACKEND`  | None                                         | A Drupal site other than `druxt.baseUrl` to register on. See [Registering on another Drupal site](#registering-on-another-drupal-site).                    |
-| None       | `DRUXT_NODE_PREVIEW_REGISTER_SECRET`   | None                                         | The consumer's secret on the `backend` site.                                                                                                               |
-| `interval` | `DRUXT_NODE_PREVIEW_REGISTER_INTERVAL` | `21600000`, 6 hours                          | The time between registrations, in milliseconds, from `60000` to `2147483647`, about 24 days. Keep it shorter than Consumer Node Preview's Inactive limit. |
+| Option      | Environment variable                     | Default                                                         | Description                                                                                                                                                                                     |
+| ----------- | ---------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`       | `DRUXT_NODE_PREVIEW_URL`                 | None                                                            | The frontend's public URL, such as `https://www.example.com`. Nuxt cannot know it from a build. Add the router base, if the site has one.                                                       |
+| `consumer`  | `DRUXT_NODE_PREVIEW_CLIENT_ID`           | None                                                            | The client ID of the consumer to register on.                                                                                                                                                   |
+| None        | `DRUXT_NODE_PREVIEW_CLIENT_SECRET`       | None                                                            | The consumer's secret.                                                                                                                                                                          |
+| `label`     | None                                     | The host of `url`, such as `www.example.com`                    | The target's name in Drupal's Frontend picker.                                                                                                                                                  |
+| `token`     | `DRUXT_NODE_PREVIEW_REGISTER_TOKEN`      | `true` with `backend`, otherwise `false`                        | Registers a target that reads the preview with a token. See [Previews with a token](preview-request.md#previews-with-a-token).                                                                  |
+| `backend`   | `DRUXT_NODE_PREVIEW_REGISTER_BACKEND`    | None                                                            | A Drupal site other than `druxt.baseUrl` to register on. See [Registering on another Drupal site](#registering-on-another-drupal-site).                                                         |
+| None        | `DRUXT_NODE_PREVIEW_REGISTER_SECRET`     | None                                                            | The consumer's secret on the `backend` site.                                                                                                                                                    |
+| `interval`  | `DRUXT_NODE_PREVIEW_REGISTER_INTERVAL`   | `21600000`, 6 hours                                             | The time between registrations, in milliseconds, from `60000` to `2147483647`, about 24 days. Keep it shorter than Consumer Node Preview's Inactive limit.                                      |
+| `expiresIn` | `DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN` | Twice `interval` for `nuxt dev` and `nuxt start`, otherwise `0` | How long Drupal keeps the target after each registration, in milliseconds, or `0` for no expiry of its own. It must be longer than `interval`. See [Expiry and shutdown](#expiry-and-shutdown). |
+| `cleanup`   | `DRUXT_NODE_PREVIEW_REGISTER_CLEANUP`    | `true` for `nuxt dev` and `nuxt start`, otherwise `false`       | Removes the target when the server stops cleanly. See [Expiry and shutdown](#expiry-and-shutdown).                                                                                              |
 
 An environment variable wins over the option in `nuxt.config.js`. So one
 config serves local, staging and production, and each host sets its own
@@ -86,6 +88,60 @@ the Inactive limit, so a target stays active through a failed attempt, or
 under a third of it for two, with a margin for how long a request takes. A static site
 only registers when it builds, so its target goes inactive unless it builds
 again in time. An inactive target can still be picked.
+
+## Expiry and shutdown
+
+A tunnel or a branch build stops, and its target shouldn't stay in the
+Frontend picker. So a server, `nuxt dev` or `nuxt start`, does two things by
+default:
+
+- Each registration asks Drupal to keep the target for `expiresIn`, twice
+  `interval` by default. A server that stops registering then leaves the
+  picker after that time, however it stopped. Drupal caps the time at its
+  **Delete after** limit, and the first cron run after the target expires deletes it.
+- When the server gets `SIGINT` or `SIGTERM`, as from Ctrl+C or a host
+  stopping it, the module stops registering and removes the target with a
+  DELETE. It waits a few seconds at most, then sends the signal again, so
+  the server stops as it would have. A `SIGINT` or `SIGTERM` listener of the
+  site's own gets the signal twice, so make it ignore the second one, or set
+  `cleanup` to `false`. A server killed outright can't remove it, so its target goes when it
+  expires.
+
+`nuxt build` and `nuxt generate` register once and exit, and a static site's
+target must stay after its build. So they don't set an expiry or remove the
+target, unless `expiresIn` or `cleanup` says otherwise. A Nuxt server started from
+your own code counts as a build too, so set both options for it.
+
+`nuxt.close()` removes the target too. A server of your own that handles
+`SIGINT` or `SIGTERM` and calls `process.exit()` would stop before the DELETE
+ends, so await `nuxt.close()` first. Keep the `nuxt` that `loadNuxt()` gives
+where the handler can reach it. With `cleanup` on, the module sends the signal
+again after the removal, so the handler runs twice: let the second call do
+nothing. A timer stops the server anyway if a close hook hangs:
+
+```js
+// server/start.js
+let nuxt
+let server
+let stopping = false
+
+const stop = async () => {
+  if (stopping) return
+  stopping = true
+  setTimeout(() => process.exit(0), 10000).unref()
+  await nuxt.close()
+  server.close(() => process.exit(0))
+}
+process.on('SIGINT', stop)
+process.on('SIGTERM', stop)
+```
+
+`nuxt dev` closes and starts again after a config change. The target goes
+when it closes, and comes back when it starts again.
+
+The expiry and the DELETE need Consumer Node Preview with target expiry. An
+earlier version ignores the expiry, and answers the DELETE with HTTP 405, so
+the module warns, and the target stays until Drupal's own limits remove it.
 
 A failure never stops the build or the server. The module shows a warning and
 Nuxt carries on. A failure before the PATCH leaves the consumer's targets as

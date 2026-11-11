@@ -8,6 +8,8 @@ import { DruxtClient } from 'druxt'
  * its target to Consumer Node Preview's targets API in a PATCH. Drupal replaces
  * the target with the same label, or adds it, and records the time. The module
  * sends the PATCH again on a timer, so a running frontend's target stays active.
+ * A running frontend's target also expires soon after the frontend stops, and
+ * a clean shutdown removes it with a DELETE.
  *
  * Every request goes through a DruxtClient, so the site's axios options apply.
  * Those are Nuxt's own `axios` option, as Druxt reads it, then `druxt.axios`.
@@ -19,6 +21,10 @@ import { DruxtClient } from 'druxt'
 
 const PREFIX = '[druxt-node-preview] '
 const TIMEOUT = 5000
+// The longest a shutdown waits for each request, and for the whole removal.
+const SHUTDOWN_TIMEOUT = 3000
+const SHUTDOWN_LIMIT = 8000
+const SIGNALS = ['SIGINT', 'SIGTERM']
 
 /**
  * The default time between registrations, in milliseconds. Consumer Node
@@ -37,6 +43,54 @@ const warn = (message) => console.warn(PREFIX + message)
 const info = (message) => console.info(PREFIX + message)
 
 const fromEnv = (env, name) => (env[name] || '').trim() || undefined
+
+/**
+ * Returns a setting from the environment, or else the option.
+ *
+ * @param {object} env - The environment.
+ * @param {string} name - The environment variable.
+ * @param {*} option - The option's value.
+ *
+ * @returns {*} The setting, or undefined when neither is set.
+ */
+const setting = (env, name, option) => {
+  const value = fromEnv(env, name)
+  return value === undefined ? option : value
+}
+
+/**
+ * Returns a number of milliseconds from the environment, or else the option.
+ *
+ * The environment holds only strings, so its value is read as a number. An
+ * option must be a number already.
+ *
+ * @param {object} env - The environment.
+ * @param {string} name - The environment variable.
+ * @param {*} option - The option's value.
+ *
+ * @returns {*} The number, NaN when the environment's value is not a whole
+ *   number, the option as it is, or undefined when neither is set.
+ */
+const milliseconds = (env, name, option) => {
+  const value = fromEnv(env, name)
+  if (value === undefined) return option
+  return /^\d+$/.test(value) ? Number(value) : NaN
+}
+
+/**
+ * Returns true or false, from the environment or an option.
+ *
+ * @param {*} value - The setting.
+ *
+ * @returns {boolean|undefined} The value, or undefined when it is neither.
+ */
+const toBoolean = (value) =>
+  new Map([
+    ['true', true],
+    ['1', true],
+    ['false', false],
+    ['0', false],
+  ]).get(String(value))
 
 /**
  * Returns the frontend's base URL without a trailing slash, or null.
@@ -125,13 +179,23 @@ const rawBackend = (options, env) =>
  * registrations in milliseconds. A site whose Consumer Node Preview marks
  * targets inactive sooner than a day sets it lower.
  *
+ * DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN, or `expiresIn`, is how long Drupal
+ * keeps the target after each registration, in milliseconds, or 0 for no
+ * time of its own. DRUXT_NODE_PREVIEW_REGISTER_CLEANUP, or `cleanup`, says
+ * whether a clean shutdown removes the target. A server that keeps running,
+ * as with nuxt dev and nuxt start, registers again on the interval. So by
+ * default its target expires after twice the interval, and goes when it
+ * stops. A build registers once, so by default its target stays.
+ *
  * @param {*} value - The `register` option.
  * @param {object} env - The environment, such as process.env.
+ * @param {object} [process] - The Nuxt process.
+ * @param {boolean} [process.server] - Whether it keeps running as a server.
  *
- * @returns {object|null} The url, label, consumer, secret, token and
- *   interval, and the backend when there is one.
+ * @returns {object|null} The url, label, consumer, secret, token, interval,
+ *   expiresIn and cleanup, and the backend when there is one.
  */
-export const resolveRegister = (value, env) => {
+export const resolveRegister = (value, env, { server = false } = {}) => {
   if (value === undefined || value === null || value === false) return null
   const options = registerOptions(value)
   if (!options) {
@@ -154,17 +218,12 @@ export const resolveRegister = (value, env) => {
     : 'DRUXT_NODE_PREVIEW_CLIENT_SECRET'
   const secret = fromEnv(env, secretName)
 
-  const envToken = fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_TOKEN')
-  const rawToken = envToken !== undefined ? envToken : options.token
-  const token =
-    rawToken === undefined
-      ? Boolean(backend)
-      : new Map([
-          ['true', true],
-          ['1', true],
-          ['false', false],
-          ['0', false],
-        ]).get(String(rawToken))
+  const rawToken = setting(
+    env,
+    'DRUXT_NODE_PREVIEW_REGISTER_TOKEN',
+    options.token
+  )
+  const token = rawToken === undefined ? Boolean(backend) : toBoolean(rawToken)
 
   const problems = [
     !url &&
@@ -184,14 +243,12 @@ export const resolveRegister = (value, env) => {
     return null
   }
 
-  // A bad interval is not worth stopping registration for.
-  const envInterval = fromEnv(env, 'DRUXT_NODE_PREVIEW_REGISTER_INTERVAL')
-  const rawInterval =
-    envInterval === undefined
-      ? options.interval
-      : /^\d+$/.test(envInterval)
-        ? Number(envInterval)
-        : NaN
+  // A bad interval, expiry or cleanup is not worth stopping registration for.
+  const rawInterval = milliseconds(
+    env,
+    'DRUXT_NODE_PREVIEW_REGISTER_INTERVAL',
+    options.interval
+  )
   let interval = HEARTBEAT
   if (rawInterval !== undefined) {
     if (
@@ -204,6 +261,43 @@ export const resolveRegister = (value, env) => {
       warn(
         `Ignored DRUXT_NODE_PREVIEW_REGISTER_INTERVAL or register.interval. Use a whole number of milliseconds, from ${MIN_INTERVAL} to ${MAX_INTERVAL}.`
       )
+    }
+  }
+
+  // The target must outlast the time to the next registration, or it would
+  // leave the picker while the frontend still runs.
+  const rawExpiresIn = milliseconds(
+    env,
+    'DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN',
+    options.expiresIn
+  )
+  let expiresIn = server ? interval * 2 : 0
+  if (rawExpiresIn !== undefined) {
+    if (
+      rawExpiresIn === 0 ||
+      (Number.isSafeInteger(rawExpiresIn) && rawExpiresIn > interval)
+    ) {
+      expiresIn = rawExpiresIn
+    } else {
+      warn(
+        `Ignored DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN or register.expiresIn. Use 0 for no expiry, or a whole number of milliseconds above the interval, ${interval}.`
+      )
+    }
+  }
+
+  const rawCleanup = setting(
+    env,
+    'DRUXT_NODE_PREVIEW_REGISTER_CLEANUP',
+    options.cleanup
+  )
+  let cleanup = server
+  if (rawCleanup !== undefined) {
+    if (toBoolean(rawCleanup) === undefined) {
+      warn(
+        'Ignored DRUXT_NODE_PREVIEW_REGISTER_CLEANUP or register.cleanup. Use true or false.'
+      )
+    } else {
+      cleanup = toBoolean(rawCleanup)
     }
   }
 
@@ -220,6 +314,8 @@ export const resolveRegister = (value, env) => {
     secret,
     token,
     interval,
+    expiresIn,
+    cleanup,
     ...(backend ? { backend } : {}),
   }
 }
@@ -377,6 +473,104 @@ const send = async (client, config, hints, site) => {
 }
 
 /**
+ * Returns a client for the Drupal site the target is on, and a token for it.
+ *
+ * @param {object} settings - The settings, as for registerTarget().
+ * @param {number} [cap] - The longest each request may take, in milliseconds.
+ *
+ * @returns {Promise<object>} The client, the base URL, the token, and what to
+ *   set to the URL Drupal redirects to.
+ */
+const connect = async (
+  { baseUrl, backend, druxt = {}, axios, consumer, secret },
+  cap = Infinity
+) => {
+  if (!backend && !baseUrl) throw new Error('druxt.baseUrl is not set.')
+  const base = (backend || baseUrl).replace(/\/+$/, '')
+  const redirectTo = backend ? 'the register backend' : 'druxt.baseUrl'
+  const { protocol, hostname } = new URL(base)
+  if (
+    protocol === 'http:' &&
+    !/^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$|\.localhost$/.test(hostname)
+  ) {
+    warn(
+      `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
+    )
+  }
+  // The site's axios options are for druxt.baseUrl, so a backend gets only
+  // the timeout and proxy. Its client starts from axios's own defaults, so
+  // its adapter is the one axios chose.
+  const site = siteAxios(axios, druxt.axios)
+  const { proxy } = site
+  const timeout = Math.min(site.timeout ?? TIMEOUT, cap)
+  const client = new DruxtClient(base, {
+    ...druxt,
+    axios: backend ? { timeout } : { ...site, timeout },
+  })
+  if (backend) {
+    forBackend(client.axios.defaults, {
+      timeout,
+      ...(proxy === undefined ? {} : { proxy }),
+    })
+  }
+
+  const answer = await send(
+    client,
+    {
+      method: 'POST',
+      url: `${base}/oauth/token`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      data: new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: consumer,
+        client_secret: secret,
+      }).toString(),
+    },
+    TOKEN_HINTS,
+    redirectTo
+  )
+  const token = answer?.access_token
+  if (!token) throw new Error(`${base}/oauth/token gave no access token.`)
+  return { client, base, token, redirectTo }
+}
+
+/**
+ * Returns an error's message without the secret, the token, or any user name
+ * and password in a URL, such as druxt.baseUrl's.
+ *
+ * Drupal could echo the secret or the token in an answer.
+ *
+ * @param {Error} error - The error.
+ * @param {string[]} values - The secret, and the token if there is one.
+ *
+ * @returns {string} The message.
+ */
+const hidden = (error, values) =>
+  values
+    .filter(Boolean)
+    .reduce((text, value) => text.split(value).join('[hidden]'), error.message)
+    // Up to the last "@" before the path, because a password can hold one.
+    .replace(/(\/\/)[^/?#\s]*@/g, '$1')
+
+/**
+ * Returns the headers of a request to the targets API.
+ *
+ * @param {string} token - The access token.
+ * @param {string} consumer - The consumer's client ID.
+ *
+ * @returns {object} The headers.
+ */
+const targetHeaders = (token, consumer) => ({
+  Accept: 'application/json',
+  Authorization: `Bearer ${token}`,
+  'Content-Type': 'application/json',
+  'X-Consumer-ID': consumer,
+})
+
+/**
  * Registers the frontend's preview target on its consumer.
  *
  * It never throws. A failure prints a warning.
@@ -387,82 +581,22 @@ const send = async (client, config, hints, site) => {
  *
  * @returns {Promise<string>} "registered" or "failed".
  */
-export const registerTarget = async ({
-  baseUrl,
-  backend,
-  token: useToken,
-  druxt = {},
-  axios,
-  url,
-  label,
-  consumer,
-  secret,
-  path,
-  layouts,
-}) => {
+export const registerTarget = async (settings) => {
+  const { backend, token: useToken, url, label, consumer, secret } = settings
+  const { path, layouts, expiresIn = 0 } = settings
   let token
   try {
-    if (!backend && !baseUrl) throw new Error('druxt.baseUrl is not set.')
-    const base = (backend || baseUrl).replace(/\/+$/, '')
-    const redirectTo = backend ? 'the register backend' : 'druxt.baseUrl'
-    const { protocol, hostname } = new URL(base)
-    if (
-      protocol === 'http:' &&
-      !/^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$|\.localhost$/.test(hostname)
-    ) {
-      warn(
-        `${backend ? 'The register backend' : 'druxt.baseUrl'} uses plain HTTP, so the secret and the token cross the network unencrypted. Use https.`
-      )
-    }
-    // The site's axios options are for druxt.baseUrl, so a backend gets only
-    // the timeout and proxy. Its client starts from axios's own defaults, so
-    // its adapter is the one axios chose.
-    const site = siteAxios(axios, druxt.axios)
-    const { timeout = TIMEOUT, proxy } = site
-    const client = new DruxtClient(base, {
-      ...druxt,
-      axios: backend ? { timeout } : { timeout: TIMEOUT, ...site },
-    })
-    if (backend) {
-      forBackend(client.axios.defaults, {
-        timeout,
-        ...(proxy === undefined ? {} : { proxy }),
-      })
-    }
-
-    const answer = await send(
-      client,
-      {
-        method: 'POST',
-        url: `${base}/oauth/token`,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
-        },
-        data: new URLSearchParams({
-          grant_type: 'client_credentials',
-          client_id: consumer,
-          client_secret: secret,
-        }).toString(),
-      },
-      TOKEN_HINTS,
-      redirectTo
-    )
-    token = answer?.access_token
-    if (!token) throw new Error(`${base}/oauth/token gave no access token.`)
-
+    const connection = await connect(settings)
+    token = connection.token
+    const { client, base, redirectTo } = connection
     await send(
       client,
       {
         method: 'PATCH',
         url: `${base}/api/consumer-node-preview/targets`,
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-Consumer-ID': consumer,
-        },
-        // Without layouts, Drupal keeps the consumer's own.
+        headers: targetHeaders(token, consumer),
+        // Without layouts, Drupal keeps the consumer's own. Drupal takes the
+        // expiry in seconds, and a version without expiry ignores it.
         data: {
           target: {
             label,
@@ -473,6 +607,9 @@ export const registerTarget = async ({
               Boolean(useToken),
               Boolean(backend)
             ),
+            ...(expiresIn > 0
+              ? { expires_in: Math.ceil(expiresIn / 1000) }
+              : {}),
           },
           ...(layouts.length ? { layouts: [...new Set(layouts)] } : {}),
         },
@@ -483,20 +620,66 @@ export const registerTarget = async ({
     info(`Registered the preview target "${label}" on "${consumer}".`)
     return 'registered'
   } catch (error) {
-    // Hides the secret and the token, should Drupal ever echo one of them,
-    // and any user name and password in a URL, such as druxt.baseUrl's.
-    const message = [secret, token]
-      .filter(Boolean)
-      .reduce(
-        (text, value) => text.split(value).join('[hidden]'),
-        error.message
-      )
-      // Up to the last "@" before the path, because a password can hold one.
-      .replace(/(\/\/)[^/?#\s]*@/g, '$1')
-    warn(`Could not register the preview target: ${message}`)
+    warn(
+      `Could not register the preview target: ${hidden(error, [secret, token])}`
+    )
     return 'failed'
   }
 }
+
+const REMOVE_HINTS = {
+  ...TARGET_HINTS,
+  405: 'This version of Consumer Node Preview cannot remove a target, so the target stays until Drupal deletes it. Update Consumer Node Preview.',
+  422: 'Check the register label.',
+}
+
+/**
+ * Removes the frontend's preview target from its consumer.
+ *
+ * A clean shutdown calls it. Each request has a short timeout, so it never
+ * holds the shutdown up for long. It never throws. A failure prints a
+ * warning, and the target then stays until it expires.
+ *
+ * @param {object} settings - The settings, as for registerTarget().
+ *
+ * @returns {Promise<string>} "removed" or "failed".
+ */
+export const removeTarget = async (settings) => {
+  const { label, consumer, secret } = settings
+  let token
+  try {
+    const connection = await connect(settings, SHUTDOWN_TIMEOUT)
+    token = connection.token
+    const { client, base, redirectTo } = connection
+    await send(
+      client,
+      {
+        method: 'DELETE',
+        url: `${base}/api/consumer-node-preview/targets`,
+        headers: targetHeaders(token, consumer),
+        data: { target: { label } },
+      },
+      REMOVE_HINTS,
+      redirectTo
+    )
+    info(`Removed the preview target "${label}" from "${consumer}".`)
+    return 'removed'
+  } catch (error) {
+    warn(
+      `Could not remove the preview target: ${hidden(error, [secret, token])}`
+    )
+    return 'failed'
+  }
+}
+
+// The registration's state lives on the process. See registerOnce().
+const RUN = Symbol.for('druxt-node-preview.register')
+const TIMER = Symbol.for('druxt-node-preview.register.timer')
+const PENDING = Symbol.for('druxt-node-preview.register.pending')
+const CLEANUP = Symbol.for('druxt-node-preview.cleanup')
+const REMOVE = Symbol.for('druxt-node-preview.cleanup.remove')
+const REMOVING = Symbol.for('druxt-node-preview.removing')
+const ATTEMPT = Symbol.for('druxt-node-preview.removing.attempt')
 
 /**
  * Starts the registration once per process, and repeats it on an interval.
@@ -511,10 +694,96 @@ export const registerTarget = async ({
  * @returns {Promise<string>} The first run's promise.
  */
 export const registerOnce = (run, interval = HEARTBEAT) => {
-  const key = Symbol.for('druxt-node-preview.register')
-  if (!process[key]) {
-    process[key] = run()
-    setInterval(run, interval).unref?.()
+  // A removal still under way, such as nuxt dev's close before a restart,
+  // ends first, DELETE and all, so it can't remove this registration.
+  if (process[ATTEMPT]) {
+    return process[ATTEMPT].then(() => registerOnce(run, interval))
   }
-  return process[key]
+  if (!process[RUN]) {
+    // Every registration still running, so a removal can wait for them all.
+    const pending = (process[PENDING] = new Set())
+    const tracked = () => {
+      const registration = Promise.resolve(run())
+      pending.add(registration)
+      const done = () => pending.delete(registration)
+      registration.then(done, done)
+      return registration
+    }
+    process[RUN] = tracked()
+    process[TIMER] = setInterval(tracked, interval)
+    process[TIMER].unref?.()
+  }
+  return process[RUN]
+}
+
+/**
+ * Stops registering and removes the target, once.
+ *
+ * It waits for every registration that is still running, the first and
+ * any repeat, so no PATCH lands after the DELETE. Its promise settles after
+ * a few seconds at most, so a shutdown never waits long. A second call while
+ * it runs gets the same promise. Once the DELETE itself has ended,
+ * registerOnce() registers again, as a nuxt dev that restarts after a config
+ * change needs.
+ *
+ * @param {Function} remove - Removes the target, and returns its promise.
+ *
+ * @returns {Promise<void>} Settles when the target is removed, or the time
+ *   is up.
+ */
+export const removeRegistered = (remove) => {
+  if (process[REMOVING]) return process[REMOVING]
+  if (!process[RUN]) return Promise.resolve()
+  clearInterval(process[TIMER])
+  // removeTarget() never rejects, but a removal that did must still end, or
+  // the next registration would never run.
+  const attempt = Promise.allSettled([
+    process[RUN],
+    ...(process[PENDING] || []),
+  ])
+    .then(remove)
+    .catch(() => {})
+    .then(() => {
+      for (const key of [RUN, TIMER, PENDING, REMOVING, ATTEMPT]) {
+        delete process[key]
+      }
+    })
+  process[ATTEMPT] = attempt
+  let timer
+  process[REMOVING] = Promise.race([
+    attempt,
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, SHUTDOWN_LIMIT)
+    }),
+  ]).then(() => clearTimeout(timer))
+  return process[REMOVING]
+}
+
+/**
+ * Removes the target when the process gets SIGINT or SIGTERM.
+ *
+ * It listens once per process, and removes with the latest copy's remove,
+ * so a nuxt dev that restarted uses its new settings. A copy with cleanup
+ * off passes null, and nothing is removed. On a signal, it removes the
+ * target with removeRegistered(). Then it sends the signal again, so the
+ * process stops as it would have. A server of the site's own that exits from
+ * its own handler awaits nuxt.close() first, which removes the target too.
+ *
+ * @param {Function|null} remove - Removes the target, and returns its
+ *   promise, or null for no removal.
+ */
+export const removeOnShutdown = (remove) => {
+  process[REMOVE] = remove
+  if (process[CLEANUP] || !remove) return
+  const stop = async (signal) => {
+    for (const name of SIGNALS) process.removeListener(name, stop)
+    if (process[REMOVE]) await removeRegistered(process[REMOVE])
+    // The signal goes out again, now that this listener has gone. With no
+    // listener left, Node stops the process. signal-exit 3, which nuxt dev
+    // loads, stops it only when its own listeners are the only ones, so it
+    // needs this second signal. A site's own listener gets both.
+    process.kill(process.pid, signal)
+  }
+  process[CLEANUP] = stop
+  for (const name of SIGNALS) process.on(name, stop)
 }

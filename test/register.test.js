@@ -1,9 +1,13 @@
 import axios from 'axios'
 import { DruxtClient } from 'druxt'
+import signalExit from 'signal-exit'
 import {
   HEARTBEAT,
   registerOnce,
   registerTarget,
+  removeOnShutdown,
+  removeRegistered,
+  removeTarget,
   resolveRegister,
   targetUrl,
 } from '../src/register.js'
@@ -87,6 +91,8 @@ describe('resolveRegister', () => {
       secret: SECRET,
       token: false,
       interval: HEARTBEAT,
+      expiresIn: 0,
+      cleanup: false,
     })
   })
 
@@ -112,6 +118,8 @@ describe('resolveRegister', () => {
       secret: SECRET,
       token: false,
       interval: HEARTBEAT,
+      expiresIn: 0,
+      cleanup: false,
     })
   })
 
@@ -719,4 +727,505 @@ describe('the token option', () => {
       ).toBe(null)
     }
   )
+})
+
+describe('the expiry and the cleanup', () => {
+  const ENV = {
+    DRUXT_NODE_PREVIEW_URL: 'https://env.example.com/base/',
+    DRUXT_NODE_PREVIEW_CLIENT_ID: 'from-env',
+    DRUXT_NODE_PREVIEW_CLIENT_SECRET: SECRET,
+  }
+  const server = { server: true }
+
+  test('a server expires after twice the interval, and cleans up', () => {
+    expect(resolveRegister(true, ENV, server)).toMatchObject({
+      expiresIn: HEARTBEAT * 2,
+      cleanup: true,
+    })
+    expect(resolveRegister({ interval: 600000 }, ENV, server).expiresIn).toBe(
+      1200000
+    )
+  })
+
+  test('a build keeps its target: no expiry, no cleanup', () => {
+    expect(resolveRegister(true, ENV)).toMatchObject({
+      expiresIn: 0,
+      cleanup: false,
+    })
+  })
+
+  test('takes the expiry from the options or the environment', () => {
+    expect(
+      resolveRegister({ expiresIn: 43200000 }, ENV, server).expiresIn
+    ).toBe(43200000)
+    expect(resolveRegister({ expiresIn: 0 }, ENV, server).expiresIn).toBe(0)
+    // A build can set one too.
+    expect(resolveRegister({ expiresIn: 43200000 }, ENV).expiresIn).toBe(
+      43200000
+    )
+    expect(
+      resolveRegister(
+        { expiresIn: 43200000 },
+        { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN: ' 0 ' },
+        server
+      ).expiresIn
+    ).toBe(0)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  test.each([[HEARTBEAT], [60000], [1.5e8 + 0.5], ['43200000'], [-1], [NaN]])(
+    'the expiry %j is ignored with a warning',
+    (expiresIn) => {
+      expect(resolveRegister({ expiresIn }, ENV, server).expiresIn).toBe(
+        HEARTBEAT * 2
+      )
+      expect(warn.mock.calls[0][0]).toBe(
+        `[druxt-node-preview] Ignored DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN or register.expiresIn. Use 0 for no expiry, or a whole number of milliseconds above the interval, ${HEARTBEAT}.`
+      )
+    }
+  )
+
+  test('an expiry in the environment must be a whole number', () => {
+    const env = { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_EXPIRES_IN: '12h' }
+    expect(resolveRegister(true, env, server).expiresIn).toBe(HEARTBEAT * 2)
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  test('takes the cleanup from the options or the environment', () => {
+    expect(resolveRegister({ cleanup: false }, ENV, server).cleanup).toBe(false)
+    expect(resolveRegister({ cleanup: true }, ENV).cleanup).toBe(true)
+    const env = { ...ENV, DRUXT_NODE_PREVIEW_REGISTER_CLEANUP: '0' }
+    expect(resolveRegister({ cleanup: true }, env, server).cleanup).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  test('a cleanup that is not true or false is ignored with a warning', () => {
+    expect(resolveRegister({ cleanup: 'yes' }, ENV, server).cleanup).toBe(true)
+    expect(warn.mock.calls[0][0]).toBe(
+      '[druxt-node-preview] Ignored DRUXT_NODE_PREVIEW_REGISTER_CLEANUP or register.cleanup. Use true or false.'
+    )
+  })
+
+  test('a registration sends the expiry in whole seconds, rounded up', async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    await registerTarget(settings({ expiresIn: 1200500 }))
+    await registerTarget(settings({ expiresIn: 0 }))
+    expect(JSON.parse(request.mock.calls[1][2].body).target.expires_in).toBe(
+      1201
+    )
+    expect(JSON.parse(request.mock.calls[3][2].body).target).not.toHaveProperty(
+      'expires_in'
+    )
+  })
+})
+
+describe('removeTarget', () => {
+  test('sends one DELETE with its label and the consumer header', async () => {
+    answer(tokenOk(), saved())
+    await expect(removeTarget(settings())).resolves.toBe('removed')
+
+    expect(request).toHaveBeenCalledTimes(2)
+    const [method, url, options] = request.mock.calls[1]
+    expect(method).toBe('DELETE')
+    expect(url).toBe(API)
+    expect(options.headers).toMatchObject({
+      Authorization: `Bearer ${TOKEN}`,
+      'X-Consumer-ID': 'frontend',
+    })
+    expect(JSON.parse(options.body)).toEqual({
+      target: { label: 'www.example.com' },
+    })
+    expect(info).toHaveBeenCalledWith(
+      '[druxt-node-preview] Removed the preview target "www.example.com" from "frontend".'
+    )
+  })
+
+  test('removes from a register backend', async () => {
+    answer(tokenOk(), saved())
+    await removeTarget(
+      settings({ baseUrl: undefined, backend: 'https://cms.test' })
+    )
+    expect(request.mock.calls[1][1]).toBe(
+      'https://cms.test/api/consumer-node-preview/targets'
+    )
+  })
+
+  test('waits no more than 3 seconds for each request', async () => {
+    answer(tokenOk(), saved(), tokenOk(), saved())
+    await removeTarget(settings({ druxt: { axios: { timeout: 60000 } } }))
+    await removeTarget(settings({ druxt: { axios: { timeout: 1000 } } }))
+    expect(clients[0].axios.defaults.timeout).toBe(3000)
+    expect(clients[1].axios.defaults.timeout).toBe(1000)
+  })
+
+  test('says to update Consumer Node Preview when DELETE is not allowed', async () => {
+    answer(tokenOk(), json(405, {}))
+    await expect(removeTarget(settings())).resolves.toBe('failed')
+    expect(warn.mock.calls[0][0]).toBe(
+      `[druxt-node-preview] Could not remove the preview target: ${API} answered HTTP 405. This version of Consumer Node Preview cannot remove a target, so the target stays until Drupal deletes it. Update Consumer Node Preview.`
+    )
+  })
+
+  test('warns, and never throws or prints the secret or the token', async () => {
+    answer(tokenOk(), json(500, { message: `bad ${SECRET} ${TOKEN}` }))
+    await expect(removeTarget(settings())).resolves.toBe('failed')
+    const output = warn.mock.calls.flat().join(' ')
+    expect(output).toContain('Could not remove the preview target')
+    expect(output).not.toContain(SECRET)
+    expect(output).not.toContain(TOKEN)
+
+    answer(new Error('connect ECONNREFUSED'))
+    await expect(removeTarget(settings())).resolves.toBe('failed')
+  })
+})
+
+describe('removeOnShutdown', () => {
+  const RUN = Symbol.for('druxt-node-preview.register')
+  const CLEANUP = Symbol.for('druxt-node-preview.cleanup')
+  let kill
+  let listeners
+  beforeEach(() => {
+    delete process[RUN]
+    delete process[CLEANUP]
+    delete process[Symbol.for('druxt-node-preview.removing')]
+    delete process[Symbol.for('druxt-node-preview.removing.attempt')]
+    delete process[Symbol.for('druxt-node-preview.cleanup.remove')]
+    listeners = {
+      SIGINT: process.listeners('SIGINT'),
+      SIGTERM: process.listeners('SIGTERM'),
+    }
+    kill = jest.spyOn(process, 'kill').mockImplementation(() => true)
+  })
+  afterEach(() => {
+    for (const name of ['SIGINT', 'SIGTERM']) {
+      process.removeAllListeners(name)
+      for (const listener of listeners[name]) process.on(name, listener)
+    }
+    clearInterval(process[Symbol.for('druxt-node-preview.register.timer')])
+    delete process[RUN]
+    delete process[CLEANUP]
+    delete process[Symbol.for('druxt-node-preview.removing')]
+    delete process[Symbol.for('druxt-node-preview.removing.attempt')]
+    delete process[Symbol.for('druxt-node-preview.cleanup.remove')]
+    kill.mockRestore()
+    jest.useRealTimers()
+  })
+
+  // Leaves only this module's listener, as in a process with no other.
+  const alone = () => {
+    for (const name of ['SIGINT', 'SIGTERM']) process.removeAllListeners(name)
+  }
+
+  test("removes with the latest copy's settings, after a restart", async () => {
+    alone()
+    registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+    const first = jest.fn().mockResolvedValue('removed')
+    const second = jest.fn().mockResolvedValue('removed')
+    removeOnShutdown(first)
+    removeOnShutdown(second)
+    await process[CLEANUP]('SIGTERM')
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  test('removes nothing once a later copy turns cleanup off', async () => {
+    alone()
+    registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+    const remove = jest.fn().mockResolvedValue('removed')
+    removeOnShutdown(remove)
+    removeOnShutdown(null)
+    await process[CLEANUP]('SIGTERM')
+    expect(remove).not.toHaveBeenCalled()
+    expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
+  })
+
+  test('listens once per process', () => {
+    alone()
+    removeOnShutdown(jest.fn())
+    removeOnShutdown(jest.fn())
+    expect(process.listenerCount('SIGINT')).toBe(1)
+    expect(process.listenerCount('SIGTERM')).toBe(1)
+  })
+
+  test('on a signal, stops registering, removes the target, then stops', async () => {
+    alone()
+    // On the fake clock from the start, so the interval is one it controls.
+    jest.useFakeTimers()
+    const run = jest.fn().mockResolvedValue('registered')
+    const remove = jest.fn().mockResolvedValue('removed')
+    registerOnce(run, 60000)
+    removeOnShutdown(remove)
+    jest.advanceTimersByTime(60000)
+    expect(run).toHaveBeenCalledTimes(2)
+
+    await process[CLEANUP]('SIGTERM')
+
+    expect(remove).toHaveBeenCalledTimes(1)
+    expect(process.listenerCount('SIGTERM')).toBe(0)
+    expect(process.listenerCount('SIGINT')).toBe(0)
+    expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
+    // No registration after the removal.
+    jest.advanceTimersByTime(120000)
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('removes only after a registration that is still running', async () => {
+    alone()
+    let finish
+    const order = []
+    registerOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            order.push('registered')
+            resolve('registered')
+          }
+        }),
+      60000
+    )
+    removeOnShutdown(async () => order.push('removed'))
+    const stopping = process[CLEANUP]('SIGINT')
+    finish()
+    await stopping
+    expect(order).toEqual(['registered', 'removed'])
+  })
+
+  test('sends the signal on even when another listener is left', async () => {
+    alone()
+    process.on('SIGINT', jest.fn())
+    removeOnShutdown(jest.fn().mockResolvedValue('removed'))
+    await process[CLEANUP]('SIGINT')
+    expect(kill).toHaveBeenCalledWith(process.pid, 'SIGINT')
+  })
+
+  // nuxt dev loads signal-exit, which stops the process only when its own
+  // listeners are the only ones left. The signal must reach it once more,
+  // after this module's listener has gone.
+  test('lets signal-exit stop the process after the removal', async () => {
+    alone()
+    let exited = false
+    // Delivers a signal as Node does: to each listener, or with none, it
+    // stops the process.
+    const deliver = (signal) => {
+      const listeners = process.listeners(signal)
+      if (!listeners.length) exited = true
+      for (const listener of listeners) listener(signal)
+    }
+    kill.mockImplementation((pid, signal) => deliver(signal))
+    const removeExitHandler = signalExit(() => {})
+    try {
+      const remove = jest.fn().mockResolvedValue('removed')
+      registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+      removeOnShutdown(remove)
+      deliver('SIGINT')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(remove).toHaveBeenCalledTimes(1)
+      // Once from this module, after the removal, and once from signal-exit.
+      expect(kill).toHaveBeenCalledTimes(2)
+      expect(exited).toBe(true)
+    } finally {
+      removeExitHandler()
+      signalExit.unload()
+    }
+  })
+
+  test('stops after 8 seconds when the removal hangs', async () => {
+    alone()
+    jest.useFakeTimers()
+    registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+    removeOnShutdown(() => new Promise(() => {}))
+    const stopping = process[CLEANUP]('SIGTERM')
+    jest.advanceTimersByTime(7999)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(kill).not.toHaveBeenCalled()
+    jest.advanceTimersByTime(1)
+    await stopping
+    expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
+  })
+})
+
+describe('removeRegistered', () => {
+  const RUN = Symbol.for('druxt-node-preview.register')
+  const TIMER = Symbol.for('druxt-node-preview.register.timer')
+  const REMOVING = Symbol.for('druxt-node-preview.removing')
+  const PENDING = Symbol.for('druxt-node-preview.register.pending')
+  const reset = () => {
+    clearInterval(process[TIMER])
+    for (const key of [RUN, TIMER, PENDING, REMOVING]) delete process[key]
+    delete process[Symbol.for('druxt-node-preview.removing.attempt')]
+    delete process[Symbol.for('druxt-node-preview.cleanup.remove')]
+  }
+  beforeEach(reset)
+  afterEach(() => {
+    reset()
+    jest.useRealTimers()
+  })
+
+  test('removes once, however often it is asked', async () => {
+    registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+    const remove = jest.fn().mockResolvedValue('removed')
+    await Promise.all([removeRegistered(remove), removeRegistered(remove)])
+    expect(remove).toHaveBeenCalledTimes(1)
+  })
+
+  test('stops registering, and registers again when Nuxt starts again', async () => {
+    jest.useFakeTimers()
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    await removeRegistered(jest.fn().mockResolvedValue('removed'))
+    jest.advanceTimersByTime(120000)
+    expect(run).toHaveBeenCalledTimes(1)
+
+    // nuxt dev restarts after a config change: the new copy registers.
+    registerOnce(run, 60000)
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('waits for a repeat registration that is still running', async () => {
+    jest.useFakeTimers()
+    const order = []
+    let finish
+    let calls = 0
+    const run = () => {
+      calls += 1
+      if (calls === 1) return Promise.resolve('registered')
+      return new Promise((resolve) => {
+        finish = () => {
+          order.push('registered again')
+          resolve('registered')
+        }
+      })
+    }
+    registerOnce(run, 60000)
+    jest.advanceTimersByTime(60000)
+    const removing = removeRegistered(async () => order.push('removed'))
+    await Promise.resolve()
+    expect(order).toEqual([])
+    finish()
+    await removing
+    expect(order).toEqual(['registered again', 'removed'])
+  })
+
+  test('waits for overlapping repeat registrations', async () => {
+    jest.useFakeTimers()
+    const finishes = []
+    const order = []
+    let calls = 0
+    const run = () => {
+      calls += 1
+      if (calls === 1) return Promise.resolve('registered')
+      const n = calls
+      return new Promise((resolve) => {
+        finishes.push(() => {
+          order.push(`run ${n}`)
+          resolve('registered')
+        })
+      })
+    }
+    registerOnce(run, 60000)
+    // Two repeats start before either ends.
+    jest.advanceTimersByTime(120000)
+    expect(finishes).toHaveLength(2)
+    const removing = removeRegistered(async () => order.push('removed'))
+    finishes[1]()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(order).toEqual(['run 3'])
+    finishes[0]()
+    await removing
+    expect(order).toEqual(['run 3', 'run 2', 'removed'])
+  })
+
+  test('resets even when the removal rejects', async () => {
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    await expect(
+      removeRegistered(() => Promise.reject(new Error('down')))
+    ).resolves.toBeUndefined()
+    registerOnce(run, 60000)
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('registers after a removal that is still running', async () => {
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    let finish
+    const removing = removeRegistered(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    // nuxt dev's new copy is ready before the old copy's removal ends.
+    const registering = registerOnce(run, 60000)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(run).toHaveBeenCalledTimes(1)
+    finish('removed')
+    await removing
+    await expect(registering).resolves.toBe('registered')
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('registers only after a removal that outlasts the time limit ends', async () => {
+    jest.useFakeTimers()
+    const run = jest.fn().mockResolvedValue('registered')
+    registerOnce(run, 60000)
+    let finish
+    const removing = removeRegistered(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    // The removal's caller gets its answer at the limit.
+    await Promise.resolve()
+    await Promise.resolve()
+    jest.advanceTimersByTime(8000)
+    await removing
+    // A restart's ready hook then waits for the DELETE still on its way.
+    const registering = registerOnce(run, 60000)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(run).toHaveBeenCalledTimes(1)
+    finish('removed')
+    await registering
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  test('a registration that rejects leaves nothing unhandled', async () => {
+    const unhandled = jest.fn()
+    process.on('unhandledRejection', unhandled)
+    try {
+      await expect(
+        registerOnce(() => Promise.reject(new Error('down')), 60000)
+      ).rejects.toThrow('down')
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(unhandled).not.toHaveBeenCalled()
+    } finally {
+      process.removeListener('unhandledRejection', unhandled)
+    }
+  })
+
+  test('removes nothing when nothing registered', async () => {
+    const remove = jest.fn()
+    await removeRegistered(remove)
+    expect(remove).not.toHaveBeenCalled()
+  })
+
+  test('gives up after 8 seconds when the removal hangs', async () => {
+    jest.useFakeTimers()
+    registerOnce(jest.fn().mockResolvedValue('registered'), 60000)
+    let settled = false
+    const removing = removeRegistered(() => new Promise(() => {})).then(() => {
+      settled = true
+    })
+    jest.advanceTimersByTime(7999)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    jest.advanceTimersByTime(1)
+    await removing
+    expect(settled).toBe(true)
+  })
 })

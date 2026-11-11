@@ -469,6 +469,94 @@ describe('DruxtNodePreview module', () => {
       warn.mockRestore()
     })
 
+    test('nuxt start sends an expiry and cleans up, and a build does neither', async () => {
+      const CLEANUP = Symbol.for('druxt-node-preview.cleanup')
+      const TIMER = Symbol.for('druxt-node-preview.register.timer')
+      const signals = ['SIGINT', 'SIGTERM']
+      const before = Object.fromEntries(
+        signals.map((name) => [name, process.listeners(name)])
+      )
+      process.env.DRUXT_NODE_PREVIEW_CLIENT_SECRET = 'secret'
+      const ok = (data) => ({ status: 200, text: JSON.stringify(data) })
+      let last
+      const context = () => last
+      const run = async (nuxtOptions) => {
+        delete process[KEY]
+        delete process[CLEANUP]
+        delete process[Symbol.for('druxt-node-preview.removing')]
+        delete process[Symbol.for('druxt-node-preview.removing.attempt')]
+        request.mockReset()
+        request
+          .mockResolvedValueOnce(ok({ access_token: 't' }))
+          .mockResolvedValueOnce(ok({ targets: [] }))
+        const context = buildContext({
+          baseUrl: 'https://cms.example.com',
+          nodePreview: {
+            register: { url: 'https://www.example.com', consumer: 'frontend' },
+          },
+        })
+        Object.assign(context.options, nuxtOptions)
+        last = context
+        NuxtModule.call(context)
+        await context.hooks.ready()
+        clearInterval(process[TIMER])
+        return JSON.parse(request.mock.calls[1][2].body).target
+      }
+      try {
+        // Twice the 6 hour interval, in seconds, for nuxt dev and nuxt start.
+        expect((await run({ dev: true, _build: true })).expires_in).toBe(43200)
+        for (const name of signals)
+          process.removeListener(name, process[CLEANUP])
+        expect((await run({ _start: true })).expires_in).toBe(43200)
+        expect(process[CLEANUP]).toEqual(expect.any(Function))
+        expect(process.listeners('SIGTERM')).toContain(process[CLEANUP])
+
+        // A SIGTERM removes the target, then sends the signal on.
+        const kill = jest.spyOn(process, 'kill').mockImplementation(() => true)
+        request.mockReset()
+        request
+          .mockResolvedValueOnce(ok({ access_token: 't' }))
+          .mockResolvedValueOnce(ok({ targets: [] }))
+        for (const name of signals) process.removeAllListeners(name)
+        process.on('SIGTERM', process[CLEANUP])
+        await process[CLEANUP]('SIGTERM')
+        expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM')
+        kill.mockRestore()
+        expect(request.mock.calls[1].slice(0, 2)).toEqual([
+          'DELETE',
+          'https://cms.example.com/api/consumer-node-preview/targets',
+        ])
+        expect(JSON.parse(request.mock.calls[1][2].body)).toEqual({
+          target: { label: 'www.example.com' },
+        })
+
+        // A custom server awaits nuxt.close() before it exits, and that
+        // removes the target too.
+        await run({ _start: true })
+        request.mockReset()
+        request
+          .mockResolvedValueOnce(ok({ access_token: 't' }))
+          .mockResolvedValueOnce(ok({ targets: [] }))
+        await context().hooks.close()
+        expect(request.mock.calls[1].slice(0, 2)).toEqual([
+          'DELETE',
+          'https://cms.example.com/api/consumer-node-preview/targets',
+        ])
+        for (const name of signals)
+          process.removeListener(name, process[CLEANUP])
+
+        expect(await run({ _build: true })).not.toHaveProperty('expires_in')
+        expect(process[CLEANUP]).toBeUndefined()
+        expect(context().hooks.close).toBeUndefined()
+      } finally {
+        for (const name of signals) {
+          process.removeAllListeners(name)
+          for (const listener of before[name]) process.on(name, listener)
+        }
+        delete process[CLEANUP]
+      }
+    })
+
     test('an unusable register option warns and adds no hook', () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {})
       const context = buildContext({
