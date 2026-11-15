@@ -46,3 +46,6 @@ Fexample
 Fjsonapi
 Fnode
 Fpreview
+
+# The mock Drupal preset the example runs against.
+umami
