@@ -57,7 +57,10 @@ jobs:
       - run: npm ci
         working-directory: docs-site
 
-      - run: npm run generate
+      # --fail-on-error, because a route that throws while rendering is
+      # reported and then generate exits 0 anyway. Without it a page missing
+      # from the output uploads and deploys as though the build had succeeded.
+      - run: npm run generate -- --fail-on-error
         working-directory: docs-site
 
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3
