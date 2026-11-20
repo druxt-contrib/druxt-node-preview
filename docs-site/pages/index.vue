@@ -45,7 +45,13 @@ export default {
   },
 
   head() {
-    return { title: this.title }
+    return {
+      title: this.title,
+      // The landing page is the site, so it carries the site's name alone.
+      // The template appends that name to every other page's title, and
+      // without this the landing page is named twice over.
+      titleTemplate: '%s',
+    }
   },
 }
 </script>
