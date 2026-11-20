@@ -8,6 +8,7 @@
 # @druxt-contrib/node-preview
 
 [![npm](https://img.shields.io/npm/v/@druxt-contrib/node-preview)](https://www.npmjs.com/package/@druxt-contrib/node-preview)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://contrib.druxtjs.org/druxt-node-preview/)
 [![CI](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml/badge.svg?branch=0.x)](https://github.com/druxt-contrib/druxt-node-preview/actions/workflows/ci.yml)
 [![Discord](https://img.shields.io/discord/753866667590680587?label=discord&logo=discord&logoColor=white)](https://discord.druxtjs.org)
 
@@ -189,6 +190,8 @@ lists every message the module shows.
   `druxt.baseUrl`.
 
 ## More documentation
+
+These pages are also published as a [documentation site](https://contrib.druxtjs.org/druxt-node-preview/).
 
 - [Automatic registration](docs/registration.md), and its [Drupal
   setup](docs/registration-drupal-setup.md)
