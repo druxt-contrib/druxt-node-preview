@@ -57,6 +57,33 @@ jobs:
       - run: npm ci
         working-directory: docs-site
 
+      # The repository's own social card, where one has been uploaded. GitHub
+      # holds that picture and answers for it through the API, and this job
+      # already has a token, so the call is made here and the address is
+      # passed to the build in DOCS_OG_IMAGE. The build then needs neither a
+      # token nor a network of its own.
+      #
+      # usesCustomOpenGraphImage is the check. Where no card has been
+      # uploaded openGraphImageUrl still answers, with GitHub's own generated
+      # picture of a repository, so a repository without a card passes
+      # nothing and the site publishes @druxt/dui's placeholder instead.
+      - name: Read the repository's social card
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url=$(gh api graphql -f query='
+            query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) {
+                usesCustomOpenGraphImage
+                openGraphImageUrl
+              }
+            }' -F owner=${{ github.repository_owner }} \
+            -F name=${{ github.event.repository.name }} \
+            --jq 'if .data.repository.usesCustomOpenGraphImage
+                  then .data.repository.openGraphImageUrl else "" end' || true)
+          echo "DOCS_OG_IMAGE=$url" >> "$GITHUB_ENV"
+
       # --fail-on-error, because a route that throws while rendering is
       # reported and then generate exits 0 anyway. Without it a page missing
       # from the output uploads and deploys as though the build had succeeded.
