@@ -7,15 +7,6 @@
       GitHub, and a second copy here would be a second thing to keep true.
     -->
     <NuxtContent :document="document" />
-
-    <DuiStackBlitzEmbed
-      v-if="demo"
-      :repo="demo.repo"
-      :git-ref="demo.gitRef"
-      :dir="demo.dir"
-      :file="demo.file"
-      :title="`${title}, running`"
-    />
   </div>
 </template>
 
@@ -41,7 +32,6 @@ export default {
 
   computed: {
     title: ({ $config }) => $config.docsTitle,
-    demo: ({ $config }) => $config.docsDemo || null,
   },
 
   head() {
