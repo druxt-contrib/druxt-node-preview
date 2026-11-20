@@ -1,3 +1,5 @@
+import { ORDER } from './nav'
+
 /*
  * The documentation site for this module.
  *
@@ -97,6 +99,12 @@ export default {
         // GitHub, which is the only place the site can send a reader for it.
         repoUrl: 'https://github.com/druxt-contrib/druxt-node-preview',
         gitRef: '0.x',
+        // Where this site is published, for the sitemap and llms.txt. It has
+        // no default: a guess from GITHUB_REPOSITORY is wrong the moment a
+        // custom domain is set, and a sitemap of addresses that redirect is
+        // worse than none.
+        siteUrl: 'https://contrib.druxtjs.org',
+        order: ORDER,
       },
     ],
     '@nuxt/content',
