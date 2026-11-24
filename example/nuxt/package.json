@@ -2,12 +2,22 @@
   "name": "druxt-node-preview-example-nuxt",
   "private": true,
   "scripts": {
-    "dev": "nuxt dev",
+    "dev": "concurrently -k -n mock,nuxt -c magenta,green \"npm:mock\" \"wait-on tcp:127.0.0.1:3005 && npm run nuxt\"",
+    "mock": "decoupled-drupal-mock serve decoupled-drupal-mock-umami --port 3005",
+    "nuxt": "nuxt dev",
     "build": "nuxt build",
     "start": "nuxt start"
   },
   "dependencies": {
+    "@druxt-contrib/node-preview": "^0.1.0",
     "druxt-site": "^0.15.0",
     "nuxt": "^2.17.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "decoupled-drupal-mock": "^1.0.0-alpha.2",
+    "decoupled-drupal-mock-umami": "^1.0.0-alpha.2",
+    "wait-on": "^8.0.5",
+    "webpack": "^4.46.0"
   }
 }
