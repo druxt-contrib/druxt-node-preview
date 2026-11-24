@@ -3,6 +3,16 @@
 A paired Drupal and Nuxt setup for trying the preview flow end to end.
 Each block of commands starts in this `example` directory.
 
+The Nuxt app runs against either of two backends, and the choice decides what
+you can see:
+
+- The mock Drupal the app starts for itself needs only Node. It doesn't serve
+  a preview endpoint, so this shows a Druxt site on a mock backend.
+  [The Nuxt app](#the-nuxt-app) has it.
+- The Drupal site below is what the preview flow needs.
+  [Against the Drupal site](#against-the-drupal-site) has it, and the Drupal
+  section is a prerequisite for that rather than for the mock.
+
 ## Drupal
 
 `drupal/composer.json` builds a Drupal site with Consumer Node Preview,
@@ -60,7 +70,7 @@ Then:
    php -S 127.0.0.1:8080 .ht.router.php
    ```
 
-## Nuxt
+## The Nuxt app
 
 The Nuxt app runs on Node 16, as the repository's `.nvmrc` says.
 
@@ -69,6 +79,25 @@ cd nuxt
 npm install
 npm run dev
 ```
+
+`npm run dev` starts the mock Drupal on port 3005 and points `druxt.baseUrl`
+at it, so the app runs without installing Drupal. The mock answers JSON:API and
+doesn't serve a preview endpoint, so what this shows is a Druxt site on a mock
+backend. Seeing a preview needs the Drupal site above.
+
+### Against the Drupal site
+
+Set `DRUPAL_BASE_URL` and run Nuxt on its own. `npm run nuxt` is the Nuxt half
+of `npm run dev` without the mock, which a real backend does not need:
+
+```sh
+cd nuxt
+npm install
+DRUPAL_BASE_URL=http://localhost:8080 npm run nuxt
+```
+
+The address is the one the Drupal section serves on, and `localhost` rather
+than `127.0.0.1` so the preview's session cookie is sent.
 
 Edit the Landing page in Drupal, press Preview, and pick the frontend.
 
@@ -88,10 +117,11 @@ with the consumer's details in the environment:
 
 ```sh
 cd nuxt
+DRUPAL_BASE_URL=http://localhost:8080 \
 DRUXT_NODE_PREVIEW_URL=http://localhost:3000 \
 DRUXT_NODE_PREVIEW_CLIENT_ID=example_frontend \
 DRUXT_NODE_PREVIEW_CLIENT_SECRET='<the consumer secret>' \
-npm run dev
+npm run nuxt
 ```
 
 The build output says that it registered the target. The recipe's target has
